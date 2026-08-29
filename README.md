@@ -41,13 +41,13 @@ they are not secured the same way.
 ## Reading these transcripts
 
 They are authored to the same format and from the same entity canon as the design set, so nothing
-about their surface distinguishes them. That is intentional: a held-out set a judge could recognise
+about their surface distinguishes them. That is intentional: a held-out set a judge could recognize
 as held-out would measure the wrong thing.
 
 The set deliberately includes at least one call with no seeded defect. A validation set where every
 call is defective would let a judge that reports problems everywhere score well by default, and the
 agreement figure would be meaningless.
 
-## Licence
+## License
 
 Corpus content is CC BY 4.0, matching the main repository's corpus tree.

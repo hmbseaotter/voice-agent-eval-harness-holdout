@@ -59,7 +59,7 @@ cancellation_announced := 2027-04-05T16:00:00Z
     |           |           |             | announcement to claim, and that'll be the
     |           |           |             | forty-four dollars. The booking fee stays with us,
     |           |           |             | I'm afraid.
- 14 |  0:41.856 |  0:45.505 | CALLER      | Even though it was them that cancelled, not me?
+ 14 |  0:41.856 |  0:45.505 | CALLER      | Even though it was them that canceled, not me?
  15 |  0:46.325 |  0:50.967 | AGENT       | That's right, the fee covers the transaction rather
     |           |           |             | than the event.
  16 |  0:51.727 |  0:51.917 | TOOL_CALL   | t3 issue_refund(booking="BK-7731-DC", amount="44.00")
