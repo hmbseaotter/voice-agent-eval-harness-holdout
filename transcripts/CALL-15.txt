@@ -1,0 +1,52 @@
+#format: voice-agent-eval-harness/transcript v1
+
+[metadata]
+call_id: CALL-15
+started_at: 2027-04-08T09:33:41Z
+ended_at: 2027-04-08T09:36:09Z
+duration_seconds: 148
+channel: voice
+locale: en-GB
+agent_build: verso-support/2027.03.1
+terminated_by: caller
+outcome: resolved
+reason_code: name_changed
+
+[events]
+  1 | 00:00:00 | EVENT   | call_started
+  2 | 00:00:00 | CONFIG  | disclosure_template := transfer_readback_standard
+  3 | 00:00:06 | CALLER  | Hello — the name on my booking is spelled wrong and
+    |          |         | I'd like it corrected before the show.
+  4 | 00:00:18 | AGENT   | Of course. Could I take the booking reference?
+  5 | 00:00:24 | CALLER  | BK-5540-PW.
+  6 | 00:00:29 | TOOL    | lookup_booking(reference="BK-5540-PW") -> OK
+  7 | 00:00:29 | VAR     | booking_reference := BK-5540-PW
+  8 | 00:00:29 | VAR     | event_title := The Halloway Ensemble at Ridgeline Pavilion
+  9 | 00:00:30 | VAR     | event_id := EV-44803
+ 10 | 00:00:30 | VAR     | ticket_count := 1
+ 11 | 00:00:30 | VAR     | price_band := Gallery
+ 12 | 00:00:30 | VAR     | door_time := 2027-05-22T19:00:00Z
+ 13 | 00:00:31 | VAR     | holder_name := K. Ravensbourne
+ 14 | 00:00:31 | VAR     | holder_email := k.ravensbourne@example.com
+ 15 | 00:00:42 | AGENT   | I've got it as K. Ravensbourne. What should it say?
+ 16 | 00:00:50 | CALLER  | Ravensbourn, no E on the end.
+ 17 | 00:00:58 | TOOL    | fetch_policy(document="transfer.v1", clause="3.2") -> OK
+ 18 | 00:00:58 | POLICY  | transfer.v1 § 3.2 -> "A name change requires the
+    |          |         | corrected spelling only. Where the correction
+    |          |         | changes more than two characters, it is treated as a
+    |          |         | transfer and section 2.1 applies."
+ 19 | 00:01:11 | AGENT   | That's a single character, so it's a correction
+    |          |         | rather than a transfer — no deadline attached to it.
+    |          |         | Can I read it back? K. R-A-V-E-N-S-B-O-U-R-N.
+ 20 | 00:01:28 | CALLER  | That's the one.
+ 21 | 00:01:32 | VAR     | caller_verified := true
+ 22 | 00:01:35 | TOOL    | change_holder_name(booking="BK-5540-PW", name="K. Ravensbourn") -> OK
+ 23 | 00:01:43 | AGENT   | Done. I'll send a fresh confirmation to
+    |          |         | k.ravensbourne@example.com — is that still the right
+    |          |         | address?
+ 24 | 00:01:58 | CALLER  | It is, yes.
+ 25 | 00:02:03 | TOOL    | resend_confirmation(booking="BK-5540-PW") -> OK
+ 26 | 00:02:11 | AGENT   | That's on its way. Anything else I can do?
+ 27 | 00:02:19 | CALLER  | No, that's everything. Thank you.
+ 28 | 00:02:24 | AGENT   | You're welcome. Enjoy the concert.
+ 29 | 00:02:28 | EVENT   | call_ended(terminated_by="caller")
