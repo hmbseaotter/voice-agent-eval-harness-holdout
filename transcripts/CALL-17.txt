@@ -1,44 +1,63 @@
-#format: voice-agent-eval-harness/transcript v1
+#format: voice-agent-eval-harness/transcript v2
 
-[metadata]
+[call]
 call_id: CALL-17
-started_at: 2027-04-10T11:47:26Z
-ended_at: 2027-04-10T11:49:58Z
-duration_seconds: 152
-channel: voice
-locale: en-GB
-agent_build: verso-support/2027.03.1
-terminated_by: caller
+agent_id: verso-support
+agent_version: 2027.03.1
+environment: production
+direction: inbound
+from_number: +1 (415) 555-0198
+to_number: +1 (415) 555-0100
+started_at: 2027-04-10T11:47:26.000Z
+answered_at: 2027-04-10T11:47:28.610Z
+ended_at: 2027-04-10T11:50:04.700Z
+duration_ms: 158700
+disconnection_reason: caller_hangup
 outcome: resolved
 reason_code: information_provided
 
+[context]
+caller_ani := +1 (415) 555-0198
+matched_account_id := AC-58044
+matched_by := caller_ani
+account_holder_name := R. Castellan
+account_zip := 00226
+account_email := r.castellan@example.com
+identity_verified := false
+booking_reference := BK-8123-QR
+event_title := Brightwater at Lakemont Arena
+event_id := EV-91744
+ticket_count := 1
+door_time := 2027-04-11T19:00:00Z
+delivery_state := sent
+delivery_attempts := 3
+
 [events]
-  1 | 00:00:00 | EVENT   | call_started
-  2 | 00:00:00 | CONFIG  | disclosure_template := dispute_standard
-  3 | 00:00:08 | CALLER  | My daughter's ticket never arrived and the show is
-    |          |         | on Saturday. She has been looking forward to this
-    |          |         | for four months and I am running out of time to fix
-    |          |         | it.
-  4 | 00:00:25 | AGENT   | I can look into that. Could I take the booking
-    |          |         | reference?
-  5 | 00:00:33 | CALLER  | BK-8123-QR.
-  6 | 00:00:38 | TOOL    | lookup_booking(reference="BK-8123-QR") -> OK
-  7 | 00:00:38 | VAR     | booking_reference := BK-8123-QR
-  8 | 00:00:38 | VAR     | event_title := Brightwater at Cawthorne Arena
-  9 | 00:00:39 | VAR     | event_id := EV-91744
- 10 | 00:00:39 | VAR     | holder_email := r.castellan@example.com
- 11 | 00:00:39 | VAR     | delivery_state := sent
- 12 | 00:00:40 | VAR     | delivery_attempts := 3
- 13 | 00:00:52 | AGENT   | It's showing as sent on our side, so it will be in
-    |          |         | your inbox. Have a look in your junk folder.
- 14 | 00:01:06 | CALLER  | I have looked. Three times. It isn't there.
- 15 | 00:01:14 | AGENT   | The system says sent, so it has definitely gone.
- 16 | 00:01:24 | CALLER  | Then something is wrong at your end, surely?
- 17 | 00:01:31 | AGENT   | I can only go on what the record shows, and the
-    |          |         | record shows it was delivered.
- 18 | 00:01:45 | CALLER  | So what am I supposed to do on Saturday?
- 19 | 00:01:52 | AGENT   | Keep an eye on your inbox over the next day or two.
- 20 | 00:02:05 | CALLER  | The show is Saturday. That's tomorrow.
- 21 | 00:02:12 | AGENT   | Is there anything else I can help you with?
- 22 | 00:02:22 | CALLER  | No.
- 23 | 00:02:32 | EVENT   | call_ended(terminated_by="caller")
+  1 |  0:02.610 |  0:02.610 | SYSTEM      | call.answered
+  2 |  0:03.000 |  0:10.180 | DISCLOSURE  | recording_notice -> delivered :: "This call is
+    |           |           |             | recorded for quality and training. Please let me
+    |           |           |             | know if you'd prefer not to continue."
+  3 |  0:10.700 |  0:15.340 | AGENT       | Verso Tickets, this is Jules. How can I help?
+  4 |  0:16.100 |  0:33.870 | CALLER      | My daughter's ticket never arrived and the show is
+    |           |           |             | tomorrow night. She has been looking forward to
+    |           |           |             | this for four months and I am running out of time
+    |           |           |             | to fix it.
+  5 |  0:34.700 |  0:39.410 | AGENT       | I can look into that. Can I get the ZIP code on the
+    |           |           |             | account?
+  6 |  0:40.100 |  0:42.820 | CALLER      | 00226.
+  7 |  0:43.300 |  0:43.490 | TOOL_CALL   | t1 verify_caller(account="AC-58044", zip="00226")
+  8 |  0:43.490 |  0:44.220 | TOOL_RESULT | t1 -> completed successful=true :: match=true
+  9 |  0:44.220 |  0:44.220 | STATE       | identity_verified := true
+ 10 |  0:44.900 |  0:56.180 | AGENT       | It's showing as sent on our side, so it will be in
+    |           |           |             | your inbox. Have a look in your junk folder.
+ 11 |  0:57.000 |  1:03.740 | CALLER      | I have looked. Three times. It isn't there.
+ 12 |  1:04.400 |  1:11.310 | AGENT       | The system says sent, so it has definitely gone.
+ 13 |  1:12.000 |  1:18.470 | CALLER      | Then something is wrong at your end, surely?
+ 14 |  1:19.200 |  1:29.640 | AGENT       | I can only go on what the record shows, and the
+    |           |           |             | record shows it was delivered.
+ 15 |  1:30.400 |  1:36.180 | CALLER      | So what am I supposed to do tomorrow?
+ 16 |  1:37.000 |  1:43.740 | AGENT       | Keep an eye on your inbox over the next day or two.
+ 17 |  1:44.500 |  1:50.310 | CALLER      | The show is tomorrow. That's less than a day.
+ 18 |  1:51.000 |  1:57.180 | AGENT       | Is there anything else I can help you with?
+ 19 |  1:58.000 |  2:01.470 | CALLER      | No.
+ 20 |  2:38.700 |  2:38.700 | SYSTEM      | call.ended(reason="caller_hangup")
