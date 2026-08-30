@@ -44,9 +44,21 @@ They are authored to the same format and from the same entity canon as the desig
 about their surface distinguishes them. That is intentional: a held-out set a judge could recognize
 as held-out would measure the wrong thing.
 
-The set deliberately includes at least one call with no seeded defect. A validation set where every
-call is defective would let a judge that reports problems everywhere score well by default, and the
-agreement figure would be meaningless.
+**The set's composition is not stated here.** How many of the five carry a seeded defect, and which,
+is a fact about the labels, and the labels are what this repository withholds until phase 5. The
+transcripts themselves are readable, so a reader can form their own view; what is withheld is this
+repository asserting one.
+
+That omission is load-bearing rather than tidy. D21 secures property (a) by the labels **not
+existing** before `rubric-frozen-v1` — a mechanism that guards files. A sentence describing the
+labels is not a file, and it would not be caught if it travelled: the main repository's held-out
+scan reads every file in its tree looking for transcripts, and D37 requires it to leave prose that
+merely mentions this set alone, since a check that fired on ordinary README text would be switched
+off within a week. So nothing but an editorial decision separates a composition claim from the
+design context this repository exists to stay out of. That decision is recorded as **D61** in the
+main repository, which deliberately does not restate what was removed — a decision record made of
+the labels it reasons about belongs on neither side of the split. The claim and the reasoning behind
+it publish here, with the plaintext labels, at phase 5.
 
 ## License
 
