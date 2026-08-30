@@ -31,7 +31,7 @@ ticket_count := 2
 ticket_price_total := 44.00
 currency := USD
 booking_fee := 3.50
-event_state := cancelled_by_promoter
+event_state := canceled_by_promoter
 cancellation_announced := 2027-04-05T16:00:00Z
 
 [events]

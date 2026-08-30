@@ -1,0 +1,87 @@
+name: checks
+
+# The held-out set had no verification of any kind, while the main repository's
+# `tools/verify_phase1.py` carried a caveat reading "that the five exist in the
+# companion repository IS ASSERTED THERE, not here". It was asserted nowhere.
+#
+# This workflow is deliberately small. It does not evaluate the transcripts, it
+# does not score them, and it holds no labels. It asserts three things a format
+# change or an accidental commit would break, and one thing the freeze depends
+# on.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the held-out set
+        uses: actions/checkout@v4
+
+      - name: Check out the harness alongside it
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: hmbseaotter/voice-agent-eval-harness
+          path: .harness
+
+      - name: The set is exactly CALL-13 through CALL-17
+        run: |
+          set -eu
+          found=$(ls transcripts/CALL-*.txt | wc -l)
+          test "$found" -eq 5 || { echo "expected 5 transcripts, found $found"; exit 1; }
+          for n in 13 14 15 16 17; do
+            test -f "transcripts/CALL-$n.txt" || { echo "missing CALL-$n.txt"; exit 1; }
+          done
+          echo "5 transcripts, CALL-13 through CALL-17"
+
+      - name: No labels exist before the freeze
+        # The real guard here. D21 withholds the labels until after
+        # `rubric-frozen-v1`, and "the labels do not exist yet" was a promise
+        # rather than a check. A file matching these names failing the build is
+        # what makes it a check.
+        run: |
+          set -eu
+          if ls labels* label-* *labels*.json *labels*.yaml 2>/dev/null | grep -q .; then
+            echo "a labels-shaped file exists in the held-out repository before the freeze"
+            ls labels* label-* *labels*.json *labels*.yaml 2>/dev/null
+            exit 1
+          fi
+          echo "no labels-shaped file present"
+
+      - name: Set up Python
+        if: hashFiles('.harness/pyproject.toml') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Every transcript parses under the harness's current adapter
+        # Conditional, and it says so: the harness is a separate repository and
+        # a private one, a rename or a token-scope change would stop this step
+        # running. Stating the condition is the fix applied to the same shape
+        # in the harness's own workflow.
+        if: hashFiles('.harness/pyproject.toml') != ''
+        run: |
+          set -eu
+          python -m pip install --quiet ./.harness
+          python - <<'PY'
+          from pathlib import Path
+          from harness.corpus.text_adapter import parse_call
+
+          problems = []
+          for path in sorted(Path("transcripts").glob("CALL-*.txt")):
+              call = parse_call(path)
+              if call.unparsed:
+                  problems += [f"{path.name}:{u.line_number}: {u.reason}" for u in call.unparsed]
+              print(f"{call.record.call_id}: {len(call.events)} events, {len(call.unparsed)} unparsed")
+          if problems:
+              raise SystemExit("unparsed lines:\n  " + "\n  ".join(problems))
+          PY
+
+      - name: Say so when the harness was not available
+        if: hashFiles('.harness/pyproject.toml') == ''
+        run: echo "::warning::the harness repository was not checked out; the parse check did not run"

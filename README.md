@@ -60,6 +60,28 @@ main repository, which deliberately does not restate what was removed — a deci
 the labels it reasons about belongs on neither side of the split. The claim and the reasoning behind
 it publish here, with the plaintext labels, at phase 5.
 
+## What is checked here
+
+`.github/workflows/checks.yml` asserts three things: that the set is exactly `CALL-13`…`CALL-17`,
+that every transcript parses under the harness's current adapter with a zero unparsed-line count, and
+that **no labels-shaped file exists**. The last is the one that matters. D21 withholds the labels
+until after `rubric-frozen-v1`, and until now "they do not exist yet" was a promise rather than a
+check — a promise about a repository nobody was running anything against, since this one had no
+tests, no CI and no linter of any kind while the harness's own verifier carried a caveat saying its
+contents were *"asserted there"*.
+
+The parse step is conditional on the harness repository being checked out alongside, and says so with
+a warning when it is not. A held-out set that could not be validated without a second repository
+being public would be a worse trade.
+
+## Committing to this repository
+
+The `.gitignore` above calls the global pre-commit secret guard "the backstop" and this file "the
+primary control". **The guard is not shipped here.** Install it from the main repository —
+`hooks/README.md` in `voice-agent-eval-harness` — before committing anything to this tree. A clone
+that takes the ignore rules and none of the enforcement is exactly the hazard D29 names, and this
+repository had it unmitigated.
+
 ## License
 
 Corpus content is CC BY 4.0, matching the main repository's corpus tree.
