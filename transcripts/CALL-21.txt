@@ -1,0 +1,82 @@
+#format: voice-agent-eval-harness/transcript v2
+
+[call]
+call_id: CALL-21
+agent_id: verso-support
+agent_version: 2027.03.1
+environment: production
+direction: inbound
+from_number: +1 (415) 555-0167
+to_number: +1 (415) 555-0100
+started_at: 2027-04-13T15:08:37.000Z
+answered_at: 2027-04-13T15:08:39.530Z
+ended_at: 2027-04-13T15:10:36.838Z
+duration_ms: 119838
+disconnection_reason: transferred
+outcome: transferred
+outcome_reason: escalated
+
+[context]
+caller_ani := +1 (415) 555-0167
+matched_account_id := AC-69358
+matched_by := caller_ani
+account_holder_name := L. Marchetti
+account_zip := 00418
+account_email := l.marchetti@example.com
+identity_verified := false
+booking_reference := BK-3306-KT
+event_title := The Halloway Ensemble at Ridgeline Pavilion
+event_id := EV-44803
+ticket_count := 2
+price_band := Balcony
+price_band_note := upper tier at Ridgeline Pavilion, lowest price
+ticket_price_total := 36.00
+currency := USD
+door_time := 2027-05-22T19:00:00Z
+
+[events]
+  1 |  0:02.530 |  0:02.530 | SYSTEM      | call.answered
+  2 |  0:02.950 |  0:06.748 | DISCLOSURE  | recording_notice -> delivered :: "This call is
+    |           |           |             | recorded for quality and training purposes."
+  3 |  0:07.248 |  0:11.133 | AGENT       | Verso Tickets, this is Wren. How can I help?
+  4 |  0:11.893 |  0:27.493 | CALLER      | Hi there. I've got two Balcony seats for the
+    |           |           |             | Halloway Ensemble on May twenty-second, and it turns
+    |           |           |             | out my whole choir wants to come along — thirty-four
+    |           |           |             | of us altogether. Can I add the rest onto the same
+    |           |           |             | booking?
+  5 |  0:28.223 |  0:34.138 | AGENT       | Let me see what's there. Can I get the ZIP code on
+    |           |           |             | the account?
+  6 |  0:34.828 |  0:35.528 | CALLER      | 00418.
+  7 |  0:36.008 |  0:36.198 | TOOL_CALL   | t1 verify_caller(account="AC-69358", zip="00418")
+  8 |  0:36.198 |  0:36.928 | TOOL_RESULT | t1 -> completed successful=true :: match=true
+  9 |  0:36.928 |  0:36.928 | STATE       | identity_verified := true
+ 10 |  0:37.608 |  0:37.798 | TOOL_CALL   | t2 check_availability(event="EV-44803", band="Balcony")
+ 11 |  0:37.798 |  0:40.310 | TOOL_RESULT | t2 -> retrieved successful=true :: available=19
+ 12 |  0:40.970 |  0:51.655 | AGENT       | Thank you. There are nineteen Balcony seats left, so
+    |           |           |             | I can't seat thirty-two more of you together up
+    |           |           |             | there. Let me check the Mezzanine as well.
+ 13 |  0:52.195 |  0:52.385 | TOOL_CALL   | t3 check_availability(event="EV-44803", band="Mezzanine")
+ 14 |  0:52.385 |  0:54.772 | TOOL_RESULT | t3 -> retrieved successful=true :: available=41
+ 15 |  0:55.472 |  1:10.867 | AGENT       | The Mezzanine has forty-one, so the numbers work
+    |           |           |             | there — but a group that size has to go through our
+    |           |           |             | group sales team, and I can't set that up from here.
+    |           |           |             | Can I put you through to them now?
+ 16 |  1:11.687 |  1:15.165 | CALLER      | Yes, please. Will my two seats be affected?
+ 17 |  1:15.855 |  1:19.120 | AGENT       | No, those two stay exactly as they are.
+ 18 |  1:20.030 |  1:38.328 | AGENT       | Before I transfer you, here's what I'm sending
+    |           |           |             | across so you don't have to repeat yourself: holder
+    |           |           |             | L. Marchetti, booking BK-3306-KT, two Balcony seats
+    |           |           |             | for May twenty-second, needs thirty-two more for a
+    |           |           |             | choir of thirty-four, nineteen left in Balcony and
+    |           |           |             | forty-one in Mezzanine.
+ 19 |  1:39.118 |  1:40.740 | CALLER      | That's right, thank you.
+ 20 |  1:41.410 |  1:47.243 | AGENT       | Putting you through now — stay on the line, it may
+    |           |           |             | take a moment.
+ 21 |  1:47.793 |  1:47.983 | TOOL_CALL   | t4 transfer_to_specialist(queue="group sales",
+    |           |           |             | summary="holder L. Marchetti, booking BK-3306-KT,
+    |           |           |             | two Balcony seats for May twenty-second, needs
+    |           |           |             | thirty-two more for a choir of thirty-four, nineteen
+    |           |           |             | left in Balcony and forty-one in Mezzanine")
+ 22 |  1:47.983 |  1:59.626 | TOOL_RESULT | t4 -> completed successful=true :: handoff_id=HO-4417;
+    |           |           |             | connected=true
+ 23 |  1:59.838 |  1:59.838 | SYSTEM      | call.ended(reason="transferred")

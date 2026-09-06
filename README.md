@@ -1,7 +1,7 @@
 # voice-agent-eval-harness-holdout
 
 The held-out corpus for [`voice-agent-eval-harness`](https://github.com/hmbseaotter/voice-agent-eval-harness).
-Five transcripts. **No labels yet, deliberately.**
+Six transcripts. **No labels yet, deliberately.**
 
 ## Why this is a separate repository
 
@@ -20,7 +20,7 @@ no explanation.
 
 | | |
 |---|---|
-| **Now** | Five transcripts, `CALL-13` … `CALL-17`, in the format specified by [`specs/transcript-format.md`](https://github.com/hmbseaotter/voice-agent-eval-harness/blob/main/specs/transcript-format.md) in the main repository. |
+| **Now** | Six transcripts, `CALL-13` … `CALL-17` and `CALL-21`, in the format specified by [`specs/transcript-format.md`](https://github.com/hmbseaotter/voice-agent-eval-harness/blob/main/specs/transcript-format.md) in the main repository. |
 | **Phase 5** | Human-authored labels for those transcripts, then a hash manifest of them, then the judged run, then published plaintext labels and an agreement measurement. |
 
 **The order is the mechanism, and it is not negotiable.** Two distinct properties are secured by two
@@ -44,7 +44,7 @@ They are authored to the same format and from the same entity canon as the desig
 about their surface distinguishes them. That is intentional: a held-out set a judge could recognize
 as held-out would measure the wrong thing.
 
-**The set's composition is not stated here.** How many of the five carry a seeded defect, and which,
+**The set's composition is not stated here.** How many of the six carry a seeded defect, and which,
 is a fact about the labels, and the labels are what this repository withholds until phase 5. The
 transcripts themselves are readable, so a reader can form their own view; what is withheld is this
 repository asserting one.
@@ -62,7 +62,7 @@ it publish here, with the plaintext labels, at phase 5.
 
 ## What is checked here
 
-`.github/workflows/checks.yml` asserts three things itself: that the set is exactly `CALL-13`…`CALL-17`,
+`.github/workflows/checks.yml` asserts three things itself: that the set is exactly `CALL-13`…`CALL-17` and `CALL-21`,
 that every transcript parses under the harness's current adapter with a zero unparsed-line count, and
 that **no labels-shaped file exists**. The last is the one that matters. D21 withholds the labels
 until after `rubric-frozen-v1`, and until now "they do not exist yet" was a promise rather than a
@@ -84,10 +84,10 @@ would go quiet again; the failing step is what turns that reversion into a red b
 green one. This is the difference the repository keeps rediscovering, between a promise and a check.
 
 `tests/test_holdout_conventions.py` adds two conventions the harness enforces and this repository
-could not, because the harness's own suite globs `corpus/transcripts/` and so never reached these
-five: that **no tool-call argument enters a call from nowhere the transcript records**, and that
+could not, because the harness's own suite globs `corpus/transcripts/` and so never reached this
+set: that **no tool-call argument enters a call from nowhere the transcript records**, and that
 **policy retrieval returns a whole document whose stated clause count is real**. Both were settled in
-the harness on 2026-09-01, after these transcripts were written; `HOLDOUT-OBLIGATIONS.md` there exists
+the harness on 2026-09-01, after the first five were written; `HOLDOUT-OBLIGATIONS.md` there exists
 precisely because nothing on either side could detect the gap.
 
 The provenance rule is a **copy**, not an import — it is a private helper in the harness's test tree,

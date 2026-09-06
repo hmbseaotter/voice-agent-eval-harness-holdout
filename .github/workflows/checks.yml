@@ -45,15 +45,15 @@ jobs:
           path: .harness
           token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
 
-      - name: The set is exactly CALL-13 through CALL-17
+      - name: The set is exactly CALL-13 through CALL-17 and CALL-21
         run: |
           set -eu
           found=$(ls transcripts/CALL-*.txt | wc -l)
-          test "$found" -eq 5 || { echo "expected 5 transcripts, found $found"; exit 1; }
-          for n in 13 14 15 16 17; do
+          test "$found" -eq 6 || { echo "expected 6 transcripts, found $found"; exit 1; }
+          for n in 13 14 15 16 17 21; do
             test -f "transcripts/CALL-$n.txt" || { echo "missing CALL-$n.txt"; exit 1; }
           done
-          echo "5 transcripts, CALL-13 through CALL-17"
+          echo "6 transcripts, CALL-13 through CALL-17 and CALL-21"
 
       - name: No labels exist before the freeze
         # The real guard here. D21 withholds the labels until after
