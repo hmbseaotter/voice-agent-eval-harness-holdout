@@ -113,8 +113,23 @@ jobs:
           python -m pip install --quiet pytest
           HARNESS_ROOT=.harness python -m pytest tests -v
 
-      - name: Say so when the harness was not available
+      - name: Fail when the harness was not available
+        # This was a warning, and the warning is precisely what let this repository
+        # report success for a week while asserting almost nothing. Every check
+        # that reads a transcript is conditional on the harness being checked out;
+        # without it this job has verified that five files exist and that none is
+        # named like a label set, and nothing whatever about their contents. That
+        # is not what a green tick claims.
+        #
+        # It is also the failure mode that returns. HARNESS_READ_TOKEN expires,
+        # and on the day it does the conditional steps go quiet again. This step
+        # is what turns that silent reversion into a red build, which is the whole
+        # difference between a promise and a check.
         if: hashFiles('.harness/pyproject.toml') == ''
         run: |
-          echo "::warning::the harness repository was not checked out; the parse check, the"
-          echo "::warning::provenance check and the clause-count check did not run"
+          echo "::error::the harness repository was not checked out, so the parse check, the"
+          echo "::error::provenance check and the clause-count check did not run. This job"
+          echo "::error::has verified nothing about transcript contents. Most likely"
+          echo "::error::HARNESS_READ_TOKEN is missing or expired -- it needs Contents: read"
+          echo "::error::on hmbseaotter/voice-agent-eval-harness."
+          exit 1

@@ -70,9 +70,18 @@ check — a promise about a repository nobody was running anything against, sinc
 tests, no CI and no linter of any kind while the harness's own verifier carried a caveat saying its
 contents were *"asserted there"*.
 
-The parse step is conditional on the harness repository being checked out alongside, and says so with
-a warning when it is not. A held-out set that could not be validated without a second repository
-being public would be a worse trade.
+Every step that reads a transcript is conditional on the harness repository being checked out
+alongside, and **the build fails when it is not.** That was a warning until 2026-09-06, and the
+warning is why this section was describing checks that had never run. The harness is private, the
+default `GITHUB_TOKEN` is scoped to this repository alone, and so the checkout failed on every run
+from the day the workflow was added — silently, because `continue-on-error` swallowed it. The build
+stayed green while asserting that five files existed and nothing at all about what was in them. The
+workflow said so every time, in a warning nobody read.
+
+`HARNESS_READ_TOKEN` — a fine-grained token carrying `Contents: read` on the harness repository and
+nothing else — is what makes the checkout work. It also expires, and on the day it does these checks
+would go quiet again; the failing step is what turns that reversion into a red build instead of a
+green one. This is the difference the repository keeps rediscovering, between a promise and a check.
 
 `tests/test_holdout_conventions.py` adds two conventions the harness enforces and this repository
 could not, because the harness's own suite globs `corpus/transcripts/` and so never reached these
