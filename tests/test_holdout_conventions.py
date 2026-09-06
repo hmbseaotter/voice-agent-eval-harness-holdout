@@ -322,3 +322,92 @@ def test_no_policy_retrieval_still_takes_a_clause() -> None:
         "fetch_policy takes a document and no clause (event-model.md 3.5):\n  "
         + "\n  ".join(offenders)
     )
+
+
+# --------------------------------------------------------------------------
+# One event id means one event
+# --------------------------------------------------------------------------
+
+#: Context fields that describe the *event* rather than the booking, and so must
+#: agree wherever the same `event_id` appears. Deliberately not every shared
+#: field: `ticket_count`, `booking_reference` and the rest belong to one
+#: caller's purchase and are expected to differ between two calls about the same
+#: show.
+_EVENT_SCOPED_FIELDS: Final[tuple[str, ...]] = ("event_title", "door_time")
+
+
+@requires_harness
+def test_one_event_id_means_one_event() -> None:
+    """Two calls naming the same `event_id` must agree about that event.
+
+    The harness has `test_one_event_title_per_event_id_except_where_drift_is_
+    seeded`, and it compares **titles**. Ported here as-is it would have passed
+    while this set contained a real contradiction: two calls shared an event id
+    and its title and disagreed about the door time, one of them placing the
+    show four days before the call that was arranging to attend it. Same guard,
+    same event id, narrower field list -- green, and blind to the field that
+    actually differed.
+
+    So this compares every field scoped to the event, not just the one the
+    original happened to pick. `door_time` is the field that matters most,
+    because it is what every deadline in the policy set is measured against: a
+    transfer window closes 24 hours before it, and an agent reasoning about that
+    window against the wrong date reasons correctly to a wrong answer.
+
+    The harness's own version carries a seeded-drift exemption, and this one
+    deliberately does not. Naming drift is a *design*-set defect class; a
+    held-out transcript that needs an exemption here should get one added
+    explicitly, with the reason, rather than inheriting a hole sized for another
+    corpus.
+    """
+    from harness.corpus.text_adapter import parse_call
+
+    seen: dict[tuple[str, str], dict[str, str]] = {}
+    problems: list[str] = []
+    compared = 0
+    for transcript in _transcripts():
+        call = parse_call(transcript)
+        context = dict(call.context)
+        event_id = context.get("event_id")
+        if not event_id:
+            continue
+        for field in _EVENT_SCOPED_FIELDS:
+            value = context.get(field)
+            if value is None:
+                continue
+            previous = seen.setdefault((event_id, field), {})
+            for other_call, other_value in previous.items():
+                compared += 1
+                if other_value != value:
+                    problems.append(
+                        f"{event_id} has {field}={value!r} in {call.record.call_id} "
+                        f"and {other_value!r} in {other_call}"
+                    )
+            previous[call.record.call_id] = value
+
+    assert compared, (
+        "no two transcripts share an event id, so this check compared nothing. That is a "
+        "legitimate state for a set this small -- but it means a contradiction could not "
+        "be detected, and silence should not read as agreement."
+    )
+    assert not problems, "one event id, two events:\n  " + "\n  ".join(problems)
+
+
+@requires_harness
+def test_a_call_naming_an_event_also_identifies_it() -> None:
+    """Without this, the check above silently skips a call.
+
+    Ported from the harness, where its docstring records why it exists: a call
+    once named its event non-canonically *and* declared no `event_id`, so the
+    check keyed to `event_id` never looked at it. A guard narrower than the rule
+    it enforces is green and blind.
+    """
+    from harness.corpus.text_adapter import parse_call
+
+    for transcript in _transcripts():
+        call = parse_call(transcript)
+        names = {name for name, _ in call.context}
+        if "event_title" in names:
+            assert "event_id" in names, (
+                f"{call.record.call_id} names an event without identifying it"
+            )
