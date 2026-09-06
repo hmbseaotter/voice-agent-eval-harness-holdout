@@ -23,11 +23,27 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check out the harness alongside it
+        # The default GITHUB_TOKEN is scoped to THIS repository and cannot read a
+        # different private one, so this step failed silently on every run from
+        # 2026-08-30 to 2026-09-06 -- and `continue-on-error` meant the build
+        # stayed green while the parse check, and later the two ported checks,
+        # never executed once. The workflow warned every time and nobody read it,
+        # which is this project's own recurring shape found in the mechanism built
+        # to prevent it.
+        #
+        # HARNESS_READ_TOKEN is a fine-grained token with Contents: read on the
+        # harness repository and nothing else. When the repositories go public the
+        # default token suffices and this can go away.
+        #
+        # `continue-on-error` stays, deliberately: the guard below reports "the
+        # checks did not run" in the workflow's own words, which is a clearer
+        # failure than a raw checkout error.
         uses: actions/checkout@v4
         continue-on-error: true
         with:
           repository: hmbseaotter/voice-agent-eval-harness
           path: .harness
+          token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
 
       - name: The set is exactly CALL-13 through CALL-17
         run: |
