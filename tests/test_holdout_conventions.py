@@ -2,11 +2,16 @@
 
 `HOLDOUT-REPAIR-BRIEF.md` states the case plainly: the harness's
 `tests/test_corpus_hygiene.py` globs `corpus/transcripts/`, which holds design
-calls only, so neither of the checks below had ever run against `CALL-13` ...
-`CALL-17`. Both conventions were settled on 2026-09-01 and these five were
-authored before that, so for five days the rules existed and nothing compared
-them against this tree. The brief's own sentence is the reason this file exists:
-*a repair with no check behind it is the state that produced this brief.*
+calls only, so neither of the checks below had ever run against this tree. Both
+conventions were settled on 2026-09-01 and the five transcripts here at the time
+were authored before that, so for five days the rules existed and nothing
+compared them against these files. The brief's own sentence is the reason this
+file exists: *a repair with no check behind it is the state that produced this
+brief.*
+
+The set has since grown to six. Everything below globs the directory rather than
+naming members, so a transcript added later is covered the moment it lands
+instead of when someone remembers to widen a list.
 
 **This is a port, and a port is two things that can disagree.** `_sourced_by`
 below is copied from `test_corpus_hygiene.py` rather than imported, because it
