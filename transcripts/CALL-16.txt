@@ -57,8 +57,8 @@ transfer_window_closes_at := 2027-04-17T19:30:00Z
  15 |  0:37.832 |  0:39.963 | AGENT       | That's transferred across to him.
  16 |  0:40.783 |  0:45.198 | AGENT       | Just to confirm — you're happy for that to go ahead?
  17 |  0:45.858 |  0:48.042 | CALLER      | Yes, that's what I asked for.
- 18 |  0:48.732 |  0:48.922 | TOOL_CALL   | t3 fetch_policy(document="transfer.v1", clause="2.1")
- 19 |  0:48.922 |  0:49.652 | TOOL_RESULT | t3 -> retrieved successful=true :: clause returned
+ 18 |  0:48.732 |  0:48.922 | TOOL_CALL   | t3 fetch_policy(document="transfer.v1")
+ 19 |  0:48.922 |  0:49.652 | TOOL_RESULT | t3 -> retrieved successful=true :: transfer.v1 returned; 10 clauses
  20 |  0:49.652 |  0:49.652 | POLICY      | transfer.v1 § 2.1 -> "Transfers are permitted up to 24
     |           |           |             | hours before the scheduled door time."
  21 |  0:50.332 |  0:55.496 | AGENT       | And you're well inside the window for it, so that's

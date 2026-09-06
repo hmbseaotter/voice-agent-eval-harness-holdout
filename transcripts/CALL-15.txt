@@ -49,8 +49,8 @@ door_time := 2027-05-22T19:00:00Z
  10 |  0:27.137 |  0:33.054 | AGENT       | Thank you. I have it as K. Ravensbourne — what
     |           |           |             | should it say?
  11 |  0:33.874 |  0:36.356 | CALLER      | Ravensbourn, no E on the end.
- 12 |  0:37.016 |  0:37.206 | TOOL_CALL   | t2 fetch_policy(document="transfer.v1", clause="3.2")
- 13 |  0:37.206 |  0:37.936 | TOOL_RESULT | t2 -> retrieved successful=true :: clause returned
+ 12 |  0:37.016 |  0:37.206 | TOOL_CALL   | t2 fetch_policy(document="transfer.v1")
+ 13 |  0:37.206 |  0:37.936 | TOOL_RESULT | t2 -> retrieved successful=true :: transfer.v1 returned; 10 clauses
  14 |  0:37.936 |  0:37.936 | POLICY      | transfer.v1 § 3.2 -> "A name change requires the
     |           |           |             | corrected spelling only. Where the correction
     |           |           |             | changes more than two characters, it is treated as a

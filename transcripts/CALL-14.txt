@@ -48,8 +48,8 @@ cancellation_announced := 2027-04-05T16:00:00Z
   7 |  0:28.359 |  0:28.549 | TOOL_CALL   | t1 verify_caller(account="AC-25519", zip="00382")
   8 |  0:28.549 |  0:29.279 | TOOL_RESULT | t1 -> completed successful=true :: match=true
   9 |  0:29.279 |  0:29.279 | STATE       | identity_verified := true
- 10 |  0:29.959 |  0:30.149 | TOOL_CALL   | t2 fetch_policy(document="refund.v1", clause="5.2")
- 11 |  0:30.149 |  0:30.879 | TOOL_RESULT | t2 -> retrieved successful=true :: clause returned
+ 10 |  0:29.959 |  0:30.149 | TOOL_CALL   | t2 fetch_policy(document="refund.v1")
+ 11 |  0:30.149 |  0:30.879 | TOOL_RESULT | t2 -> retrieved successful=true :: refund.v1 returned; 14 clauses
  12 |  0:30.879 |  0:30.879 | POLICY      | refund.v1 § 5.2 -> "Where an event is rescheduled by
     |           |           |             | the promoter, tickets remain valid for the new date. A
     |           |           |             | holder who cannot attend the new date may request a
