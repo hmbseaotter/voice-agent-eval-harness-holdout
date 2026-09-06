@@ -82,6 +82,23 @@ jobs:
               raise SystemExit("unparsed lines:\n  " + "\n  ".join(problems))
           PY
 
+      - name: The conventions the harness enforces and this repository could not
+        # Ported from the harness's `tests/test_corpus_hygiene.py`, which globs
+        # `corpus/transcripts/` and so had never run against these five. Both
+        # conventions were settled on 2026-09-01 and these transcripts predate
+        # that, which is the whole of why `HOLDOUT-OBLIGATIONS.md` exists.
+        #
+        # Conditional on the same thing as the step above, for the same reason:
+        # the provenance check needs the parser and the clause-count check needs
+        # the harness's `corpus/policies/`.
+        if: hashFiles('.harness/pyproject.toml') != ''
+        run: |
+          set -eu
+          python -m pip install --quiet pytest
+          HARNESS_ROOT=.harness python -m pytest tests -v
+
       - name: Say so when the harness was not available
         if: hashFiles('.harness/pyproject.toml') == ''
-        run: echo "::warning::the harness repository was not checked out; the parse check did not run"
+        run: |
+          echo "::warning::the harness repository was not checked out; the parse check, the"
+          echo "::warning::provenance check and the clause-count check did not run"

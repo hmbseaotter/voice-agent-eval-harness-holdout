@@ -62,7 +62,7 @@ it publish here, with the plaintext labels, at phase 5.
 
 ## What is checked here
 
-`.github/workflows/checks.yml` asserts three things: that the set is exactly `CALL-13`…`CALL-17`,
+`.github/workflows/checks.yml` asserts three things itself: that the set is exactly `CALL-13`…`CALL-17`,
 that every transcript parses under the harness's current adapter with a zero unparsed-line count, and
 that **no labels-shaped file exists**. The last is the one that matters. D21 withholds the labels
 until after `rubric-frozen-v1`, and until now "they do not exist yet" was a promise rather than a
@@ -73,6 +73,18 @@ contents were *"asserted there"*.
 The parse step is conditional on the harness repository being checked out alongside, and says so with
 a warning when it is not. A held-out set that could not be validated without a second repository
 being public would be a worse trade.
+
+`tests/test_holdout_conventions.py` adds two conventions the harness enforces and this repository
+could not, because the harness's own suite globs `corpus/transcripts/` and so never reached these
+five: that **no tool-call argument enters a call from nowhere the transcript records**, and that
+**policy retrieval returns a whole document whose stated clause count is real**. Both were settled in
+the harness on 2026-09-01, after these transcripts were written; `HOLDOUT-OBLIGATIONS.md` there exists
+precisely because nothing on either side could detect the gap.
+
+The provenance rule is a **copy**, not an import — it is a private helper in the harness's test tree,
+and two copies of a rule are two things that can disagree. That weakness is stated in the module's
+docstring rather than left to be discovered, and the fix, if anyone wants it, is for the rule to move
+into the `harness` package so both repositories import one implementation.
 
 ## Committing to this repository
 
