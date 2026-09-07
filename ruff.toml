@@ -1,0 +1,18 @@
+# Mirrors the harness's `[tool.ruff]`, so that "this repository is held to the
+# harness's standards" is a configuration rather than a sentence in a brief.
+# There was no configuration here at all until 2026-09-07, which meant ruff's
+# defaults applied -- an 88-column limit this repository has never followed --
+# and so the only honest description of the lint state was that nobody ran it.
+line-length = 100
+src = ["tests", "tools"]
+
+[lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ARG", "RUF"]
+
+[lint.per-file-ignores]
+# The packet builder carries a Markdown authoring brief as a string literal.
+# Its en dashes are deliberate typography in a document a person reads, and
+# RUF001 exists to catch homoglyphs in *code*. The line-length rule is not
+# exempted: the brief is wrapped to fit, because a hole in the gate is worth
+# more than the two minutes reflowing cost.
+"tools/build_authoring_packet.py" = ["RUF001"]

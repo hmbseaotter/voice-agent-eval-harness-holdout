@@ -101,8 +101,7 @@ REDACTIONS: list[tuple[str, str]] = [
             "emitted: CALL-12 carries `disclosure_ai_status` in context and no `ai_status` "
             "event, which\nis the defect F-57 states."
         ),
-        "emitted. "
-        + MARK.format("the rest identified a design transcript and a seeded finding"),
+        "emitted. " + MARK.format("the rest identified a design transcript and a seeded finding"),
     ),
 ]
 
@@ -146,7 +145,8 @@ README = """# Authoring brief — {assignment_title}
 **Read this first. This packet is deliberately incomplete, and that is its whole point.**
 
 You are being asked to author **one transcript** for a held-out evaluation set. The packet you have
-is a curated subset of a larger project, with specific passages removed. Nothing here is an oversight
+is a curated subset of a larger project, with specific passages removed. Nothing here is an
+oversight
 and nothing is being kept from you for secrecy.
 
 ---
@@ -155,8 +155,10 @@ and nothing is being kept from you for secrecy.
 
 The set you are adding to is what a judge's accuracy will eventually be **measured against**. The
 design set — the transcripts the judge is built from — already contains calls of the kind you are
-being asked to write. If you read one, or a description of one, the call you write would resemble it,
-and a judge measured on a near-twin of the material it was built from scores better than it deserves.
+being asked to write. If you read one, or a description of one, the call you write would resemble
+it,
+and a judge measured on a near-twin of the material it was built from scores better than it
+deserves.
 Not by cheating; just because the test case would look like the training case.
 
 So the packet withholds the design transcripts and everything that describes them. Where a document
@@ -184,7 +186,8 @@ transcripts/                  the transcripts already in this held-out set.
 ```
 
 **Read the existing transcripts.** The call you write has to read as a member of that set — same
-format, same entity canon, same register. Note that reading them commits this session: a session that
+format, same entity canon, same register. Note that reading them commits this session: a session
+that
 has read held-out transcripts must not afterwards work on the judge's rubric or the design corpus.
 
 ---
@@ -195,9 +198,11 @@ has read held-out transcripts must not afterwards work on the judge's rubric or 
 
 ## What the transcript must satisfy
 
-**Every value the agent passes to a tool must have a source earlier in the call.** A tool argument may
+**Every value the agent passes to a tool must have a source earlier in the call.** A tool argument
+may
 trace to a context value, a field of the call record, earlier caller or agent speech, the body of an
-earlier event including an earlier tool result, or arithmetic over context values. A value that first
+earlier event including an earlier tool result, or arithmetic over context values. A value that
+first
 appears in the result of the call that used it is *not* sourced. The single declared exception is
 `fetch_policy(document=…)`, because a document's name is part of the tool's contract.
 
@@ -207,12 +212,15 @@ Two consequences worth knowing before you write rather than after:
   require three characters and the arithmetic path adds rather than subtracts. To pass a quantity,
   key the call on something already established instead — a booking reference, an identifier from a
   prior result.
-- **If you use `fetch_policy`, it takes a document and no clause.** Its result names the document and
-  its real clause count, and a separate `POLICY` event records the clause the agent *applied*, quoted
+- **If you use `fetch_policy`, it takes a document and no clause.**
+Its result names the document and
+  its real clause count, and a separate `POLICY` event records the clause the agent *applied*,
+quoted
   verbatim. The policy documents are not in this packet, so ask for the clause counts rather than
   inventing one.
 
-**Conventions the register may not state.** Ask if a call-record field's correct value is not obvious
+**Conventions the register may not state.** Ask if a call-record field's correct value is not
+obvious
 from the vocabulary alone. The register lists what values exist; it does not always say which one a
 given situation takes, and that gap has produced a wrong field before.
 
@@ -230,7 +238,8 @@ view: write the call, not your view of it. The same applies to how the set is co
 ## When you are done
 
 1. Run the checks in this repository: `python -m pytest tests -q`, with the harness available.
-2. The workflow asserts the set is exactly the transcripts it names. Adding one makes that step fail,
+2. The workflow asserts the set is exactly the transcripts it names. Adding one makes that step
+fail,
    correctly — it needs updating in the same change, not suppressing.
 3. Expect a **resemblance check** afterwards, run by someone who can see both your call and the
    design set: event count, kind sequence, tool sequence, and where the defect sits. That check is
@@ -242,9 +251,7 @@ view: write the call, not your view of it. The same applies to how the set is co
 def build(harness: Path, out: Path, assignment: str, assignment_title: str) -> int:
     design = {
         line.strip()
-        for line in (harness / "corpus" / "DESIGN_SET")
-        .read_text(encoding="utf-8")
-        .splitlines()
+        for line in (harness / "corpus" / "DESIGN_SET").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
     if not design:
@@ -338,8 +345,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--assignment",
-        default="**Not yet written.** Replace this with what the call must contain — the class being "
-        "seeded and the closed-vocabulary values that make it an instance — and no scenario.",
+        default=(
+            "**Not yet written.** Replace this with what the call must contain — "
+            "the class being seeded and the closed-vocabulary values that make it "
+            "an instance — and no scenario."
+        ),
         help="what the new transcript must contain",
     )
     parser.add_argument("--title", default="one held-out transcript")

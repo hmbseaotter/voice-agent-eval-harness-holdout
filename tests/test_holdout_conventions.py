@@ -32,14 +32,25 @@ validated without a second repository being public would be a worse trade.
 
 from __future__ import annotations
 
+import ast
 import contextlib
+import copy
 import itertools
 import os
 import re
+import shutil
 import sys
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:  # pragma: no cover - types only, and the harness may be absent
+    # Annotations only. A runtime import would break collection wherever the
+    # harness is not checked out, which is the state every skip in this file
+    # exists for -- and the copy of `_sourced_by` below dropped its parameter
+    # annotations for exactly that reason, which is what made it fail the
+    # harness's own strict type check while claiming to be verbatim.
+    from harness.core.events import Call, ToolCallEvent
 
 import pytest
 
@@ -112,7 +123,7 @@ _UNSOURCED_ARGUMENTS_ALLOWED: Final[tuple[tuple[str, str, str], ...]] = (
 )
 
 
-def _sourced_by(call, event, value: str) -> str | None:
+def _sourced_by(call: Call, event: ToolCallEvent, value: str) -> str | None:
     """Where a tool-call argument's value came from, or None.
 
     Only earlier events count. A value first seen in the result of the call
@@ -611,9 +622,7 @@ def test_no_call_files_its_outcome_as_transferred() -> None:
     transferred` straddles the two axes those fields exist to separate.
     """
     offenders = sorted(
-        call_id
-        for call_id, fields in _call_records().items()
-        if fields["outcome"] == "transferred"
+        call_id for call_id, fields in _call_records().items() if fields["outcome"] == "transferred"
     )
     assert not offenders, (
         f"{offenders} file outcome as transferred. outcome records whether the caller's "
@@ -698,9 +707,7 @@ def test_the_cross_corpus_check_fires_on_an_event_id_that_means_two_events() -> 
     """O-4's control: one id, two door times, one on each side."""
     here = {"EV-00001": {"CALL-XX": {"event_title": "A Show", "door_time": "2027-01-01T19:00:00Z"}}}
     there = {
-        "EV-00001": {
-            "CALL-YY": {"event_title": "A Show", "door_time": "2027-01-08T19:00:00Z"}
-        }
+        "EV-00001": {"CALL-YY": {"event_title": "A Show", "door_time": "2027-01-08T19:00:00Z"}}
     }
 
     problems = _cross_corpus_disagreements(here, there)
@@ -758,4 +765,479 @@ def test_the_redaction_check_fires_on_a_pattern_that_matches_nothing() -> None:
     )
     assert _stale_redactions([], [(re.compile(r"nothing here"), "")], documents) != [], (
         "a regex redaction matching nothing was not reported"
+    )
+
+
+#: Copied from the harness's `tests/test_speech_plausibility.py`, and asserted
+#: against it below rather than trusted. D48 set the band deliberately wider
+#: than conversation occupies.
+_SLOWEST_PLAUSIBLE_WPM: Final[float] = 110.0
+_FASTEST_PLAUSIBLE_WPM: Final[float] = 185.0
+_MINIMUM_WORDS_FOR_A_RATE: Final[int] = 4
+
+
+# --------------------------------------------------------------------------
+# Conventions the harness enforces on its own corpus and could not enforce here
+# --------------------------------------------------------------------------
+#
+# An audit checked four of these against this set by hand and found them all
+# holding -- **by luck, because nothing here ran them**. A convention that holds
+# today and is enforced nowhere is a convention that holds until the next
+# transcript, which is `HOLDOUT-OBLIGATIONS.md`'s entire subject.
+#
+# Ported rather than imported, for the reason the module docstring already
+# gives: the harness's checks live in a test tree and a test module is not an
+# importable interface. Every port is two things that can disagree, so the ones
+# that copy a helper get an equality test rather than a promise.
+#
+# **The persona check is deliberately absent.** It is the fifth convention and
+# the one the audit found *failing*: the agent personas used here are declared
+# nowhere -- not in the harness register, which lists the design set's, and not
+# in this repository, which has no declaration file. Porting it would commit a
+# knowingly red build. The declaration has to exist first, and producing it is
+# mechanical rather than a reading task; the harness's O-1 entry carries the
+# design.
+
+
+def _declared_in_register(section: str) -> set[str]:
+    """Backticked lower-case identifiers under a heading in the entity canon."""
+    assert HARNESS is not None
+    register = (HARNESS / "corpus" / "entities.md").read_text(encoding="utf-8")
+    start = register.index(section)
+    rest = register[start + len(section) :]
+    end = rest.find("\n## ")
+    return set(re.findall(r"`([a-z_]+)`", rest if end == -1 else rest[:end]))
+
+
+@requires_harness
+def test_every_name_used_here_is_declared_in_the_entity_register() -> None:
+    """The register claims to be the canonical list for both corpora.
+
+    `tests/test_corpus_hygiene.py::test_every_name_the_corpus_uses_is_in_the_register`
+    asserts used-implies-declared over `corpus/transcripts/`, which is the
+    design set only. The register says so itself -- *"the held-out set is not in
+    this tree and this check does not reach it; keeping the two consistent is a
+    manual step at authoring time"* -- and this is that manual step becoming a
+    check.
+
+    Read as one pooled comparison rather than section by section. The harness
+    splits context, state, tools and disclosures because it reports which list a
+    name is missing from; here the useful question is narrower and blunter:
+    **is this name anywhere in the canon at all?** A name that is in the wrong
+    section of the register is a harness-side tidiness problem, and a name in no
+    section is a corpus that invented vocabulary its own canon does not know.
+    """
+    from harness.core.events import DisclosureEvent, StateEvent, ToolCallEvent
+    from harness.corpus.text_adapter import parse_call
+
+    assert HARNESS is not None
+    register = (HARNESS / "corpus" / "entities.md").read_text(encoding="utf-8")
+    declared = set(re.findall(r"`([a-z_][a-z0-9_]*)`", register))
+    assert len(declared) > 40, (
+        f"only {len(declared)} names parsed out of the register; the extraction has broken "
+        "and this check would pass by comparing against almost nothing"
+    )
+
+    used: dict[str, set[str]] = {
+        "context": set(),
+        "state": set(),
+        "tool": set(),
+        "disclosure": set(),
+    }
+    for transcript in _transcripts():
+        call = parse_call(transcript)
+        used["context"].update(name for name, _ in call.context)
+        for event in call.events:
+            if isinstance(event, StateEvent):
+                used["state"].add(event.name)
+            elif isinstance(event, ToolCallEvent):
+                used["tool"].add(event.name)
+            elif isinstance(event, DisclosureEvent):
+                used["disclosure"].add(event.body.split(" ")[0])
+
+    undeclared = {kind: sorted(names - declared) for kind, names in used.items()}
+    problems = {kind: names for kind, names in undeclared.items() if names}
+    assert not problems, (
+        "names used in this set and absent from the harness's entity register:\n  "
+        + "\n  ".join(f"{kind}: {names}" for kind, names in sorted(problems.items()))
+        + "\nThe register is the canonical list for both corpora, so this is either a "
+        "transcript inventing vocabulary or a register that was not updated."
+    )
+
+
+@requires_harness
+def test_every_outcome_and_reason_used_here_is_declared() -> None:
+    """The call record's own vocabulary, which the check above does not reach.
+
+    `outcome` and `disconnection_reason` are validated at extraction, so an
+    unrecognized token aborts the parse and this adds nothing for them.
+    `outcome_reason` is **not** a closed vocabulary in the model -- it is a
+    plain string -- and the register is the only place it is enumerated. So it
+    is the one field here where a typo produces a value nothing rejects and
+    nothing compares against, which is the register's own argument for
+    declaring reason codes at all.
+    """
+    from harness.corpus.text_adapter import parse_call
+
+    declared = _declared_in_register("**Outcome reasons.**")
+    assert declared, "the register's outcome-reason section no longer parses"
+
+    used = {parse_call(transcript).record.outcome_reason for transcript in _transcripts()}
+    assert used, "no outcome reasons were read"
+    undeclared = sorted(used - declared)
+    assert not undeclared, (
+        f"outcome reasons used here and absent from the register: {undeclared}. "
+        "outcome_reason is a plain string in the model, so nothing else rejects a typo"
+    )
+
+
+@requires_harness
+def test_every_utterance_here_is_spoken_at_a_plausible_rate() -> None:
+    """Speech timing gets a floor, not a model (D48).
+
+    Ported from `tests/test_speech_plausibility.py`. The band is deliberately
+    wider than the 130-160 wpm ordinary conversation occupies, because the
+    check exists to catch a transcript whose timestamps were written without
+    thinking about speech at all -- not to police delivery.
+
+    The constants are copied, and copied constants drift. They are asserted
+    against the harness's own file below rather than trusted, which is the same
+    remedy the `_sourced_by` copy gets.
+    """
+    from harness.core.events import SpeechEvent
+    from harness.corpus.text_adapter import parse_call
+
+    rows: list[tuple[str, int, int, float]] = []
+    for transcript in _transcripts():
+        call = parse_call(transcript)
+        for event in call.events:
+            if not isinstance(event, SpeechEvent):
+                continue
+            words = len(event.body.split())
+            seconds = (event.ended_at_ms - event.started_at_ms) / 1000.0
+            if words < _MINIMUM_WORDS_FOR_A_RATE or seconds <= 0:
+                continue
+            rows.append((call.record.call_id, event.index, words, words / seconds * 60.0))
+
+    assert len(rows) > 20, (
+        f"only {len(rows)} utterances were measurable across this set; too few for the "
+        "band to mean anything, which is a fact about the check rather than the corpus"
+    )
+    outliers = [
+        f"{call_id} event {index}: {words} words = {rate:.0f} wpm"
+        for call_id, index, words, rate in rows
+        if not _SLOWEST_PLAUSIBLE_WPM <= rate <= _FASTEST_PLAUSIBLE_WPM
+    ]
+    assert not outliers, (
+        f"{len(outliers)} of {len(rows)} utterances sit outside "
+        f"{_SLOWEST_PLAUSIBLE_WPM:.0f}-{_FASTEST_PLAUSIBLE_WPM:.0f} wpm:\n  "
+        + "\n  ".join(outliers)
+    )
+
+
+@requires_harness
+def test_the_copied_speech_constants_still_match_the_harness() -> None:
+    """A copied number is a number that can drift.
+
+    The band and the word floor are the harness's, and nothing but this
+    connects the two copies. If the harness widens the band and this file does
+    not, the held-out set is being held to a rule the design set no longer has
+    -- which is `HOLDOUT-OBLIGATIONS.md`'s failure mode with the arrow reversed.
+    """
+    assert HARNESS is not None
+    source = (HARNESS / "tests" / "test_speech_plausibility.py").read_text(encoding="utf-8")
+    for name, value in (
+        ("SLOWEST_PLAUSIBLE_WPM", _SLOWEST_PLAUSIBLE_WPM),
+        ("FASTEST_PLAUSIBLE_WPM", _FASTEST_PLAUSIBLE_WPM),
+        ("MINIMUM_WORDS_FOR_A_RATE", _MINIMUM_WORDS_FOR_A_RATE),
+    ):
+        found = re.search(rf"^{name}: \w+ = ([\d.]+)$", source, re.MULTILINE)
+        assert found, f"{name} is no longer declared in the harness in the shape this reads"
+        assert float(found.group(1)) == float(value), (
+            f"{name} is {found.group(1)} in the harness and {value} here"
+        )
+
+
+@requires_harness
+def test_the_copied_provenance_helper_is_the_same_code_as_the_harness_one() -> None:
+    """`_sourced_by` is a copy, and two copies are two things that can disagree.
+
+    D83 recorded this as the weakness of this file and left it open: *"if this
+    one changes and that one does not, the held-out suite goes green against a
+    stale convention -- which is `HOLDOUT-OBLIGATIONS.md`'s own failure mode,
+    one layer down."*
+
+    Compared as an **abstract syntax tree**, with three things normalized away
+    because each differs for a reason that has nothing to do with the rule.
+    **Annotations**, because the harness copy is typed and this one was not.
+    **The docstring**, because each explains itself to its own reader.
+    And **imports inside the body**: this copy takes `SpeechEvent` locally,
+    since the harness is an optional dependency here and a module-level import
+    would break collection when it is absent. Where a name comes from is not
+    part of what the function computes.
+
+    Comparing text would fail on formatting; comparing behaviour would need
+    inputs neither repository can share. The tree is the thing that has to
+    match, and the normalizations are listed rather than implied so that a
+    future difference cannot be waved through as "just formatting".
+    """
+    assert HARNESS is not None
+
+    def _body(source: str) -> str:
+        module = ast.parse(source)
+        for node in ast.walk(module):
+            if isinstance(node, ast.FunctionDef) and node.name == "_sourced_by":
+                stripped = copy.deepcopy(node)
+                stripped.returns = None
+                stripped.decorator_list = []
+                for argument in stripped.args.args:
+                    argument.annotation = None
+                for inner in ast.walk(stripped):
+                    if isinstance(inner, ast.AnnAssign):
+                        inner.annotation = ast.Name(id="_", ctx=ast.Load())
+                body = [
+                    statement
+                    for statement in stripped.body
+                    if not isinstance(statement, (ast.Import, ast.ImportFrom))
+                ]
+                if (
+                    body
+                    and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)
+                ):
+                    body = body[1:]
+                stripped.body = body
+                return ast.dump(stripped)
+        raise AssertionError("_sourced_by not found")
+
+    mine = _body((REPO_ROOT / "tests" / "test_holdout_conventions.py").read_text(encoding="utf-8"))
+    theirs = _body((HARNESS / "tests" / "test_corpus_hygiene.py").read_text(encoding="utf-8"))
+    assert mine == theirs, (
+        "the copy of _sourced_by here has diverged from the harness's. The two implement one "
+        "convention and this suite would go green against a stale version of it. Re-copy it, "
+        "or move the helper into the harness package so both import one implementation."
+    )
+
+
+# --------------------------------------------------------------------------
+# The packet builder's guarantee, exercised rather than asserted
+# --------------------------------------------------------------------------
+#
+# `tools/build_authoring_packet.py` says its own guarantee plainly: the
+# redactions are best-effort and **the scan is the gate** -- after writing the
+# packet, every file is searched for design-set identifiers, and a hit deletes
+# the packet and fails the build. That is the sentence the whole apparatus rests
+# on, and nothing exercised it. A guarantee no test has ever seen hold is a
+# guarantee in the same category as the promise it replaced.
+
+
+@requires_harness
+def test_the_leak_scan_deletes_a_leaking_packet_and_fails(tmp_path: Path) -> None:
+    """Plant a design-set identifier and assert the packet is gone.
+
+    The plant is a **design-set** id, which is this session's to know: it comes
+    from the harness's own `corpus/DESIGN_SET`. Nothing here reads a held-out
+    transcript, and the packet the builder writes is deleted by the code under
+    test, which is the behaviour being asserted.
+
+    **Both halves matter and the builder's own comment says why.** A leaking
+    packet left on disk beside a non-zero exit code is worse than no packet at
+    all, because the exit code is a thing somebody can miss and the directory is
+    a thing somebody can use. So this asserts the exit code *and* the absence.
+    """
+    assert HARNESS is not None
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    from build_authoring_packet import build
+
+    design = [
+        line.strip()
+        for line in (HARNESS / "corpus" / "DESIGN_SET").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+    assert design, "the harness declares no design set, so there is nothing to plant"
+
+    # A copy of the harness whose entity canon carries an unredactable mention
+    # of a design call -- unredactable because no pattern in REDACTIONS or
+    # LINE_REDACTIONS is written for this sentence, which is exactly the
+    # situation a stale pattern produces.
+    fake_harness = tmp_path / "harness"
+    for relative in ("specs", "corpus", "corpus/policies"):
+        (fake_harness / relative).mkdir(parents=True, exist_ok=True)
+    for name in ("transcript-format.md", "event-model.md"):
+        shutil.copy2(HARNESS / "specs" / name, fake_harness / "specs" / name)
+    shutil.copy2(HARNESS / "corpus" / "DESIGN_SET", fake_harness / "corpus" / "DESIGN_SET")
+    register = (HARNESS / "corpus" / "entities.md").read_text(encoding="utf-8")
+    (fake_harness / "corpus" / "entities.md").write_text(
+        register + f"\n\nAn unredacted mention of {design[0]} that no pattern removes.\n",
+        encoding="utf-8",
+    )
+
+    out = tmp_path / "packet"
+    code = build(fake_harness, out, "an assignment", "a title")
+
+    assert code == 1, "a packet carrying a design-set identifier was reported as a success"
+    assert not out.exists(), (
+        "the leaking packet is still on disk. The builder's own comment is that a leaking "
+        "packet beside a non-zero exit code is worse than none, because an exit code can be "
+        "missed and a directory can be used"
+    )
+
+
+@requires_harness
+def test_a_clean_packet_is_written_and_lands_outside_every_git_tree(tmp_path: Path) -> None:
+    """The other half: the scan must not fire on a packet that is fine.
+
+    A gate that refuses everything is not a gate, and this one deletes its
+    output -- so a scan that fired spuriously would look exactly like a scan
+    that worked, with nothing left behind to inspect.
+
+    It also asserts where the packet lands. The builder defaults to a directory
+    outside every repository, deliberately, so a packet cannot be committed by
+    accident; that is a property of the default rather than of the code path,
+    so it is read from the parser rather than inferred.
+    """
+    assert HARNESS is not None
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    from build_authoring_packet import build, main
+
+    out = tmp_path / "packet"
+    assert build(HARNESS, out, "an assignment", "a title") == 0, (
+        "the leak scan fired on an unmodified harness, so it is refusing packets it should "
+        "pass -- and since the builder deletes a leaking packet, that failure leaves nothing "
+        "behind to look at"
+    )
+    assert (out / "README.md").is_file()
+    assert (out / "reference" / "entity-canon.md").is_file()
+    assert sorted(p.name for p in (out / "transcripts").glob("*.txt")) == sorted(
+        p.name for p in (REPO_ROOT / "transcripts").glob("CALL-*.txt")
+    ), "the packet does not carry this repository's transcripts"
+
+    # The redactions did their work: no design-set identifier survives.
+    design = {
+        line.strip()
+        for line in (HARNESS / "corpus" / "DESIGN_SET").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    for path in (out / "reference" / "entity-canon.md", out / "specs" / "event-model.md"):
+        found = set(re.findall(r"\bCALL-\d{2}\b", path.read_text(encoding="utf-8"))) & design
+        assert not found, f"{path.name} still names design calls: {sorted(found)}"
+
+    # Where the default lands, read from the parser rather than from the source
+    # text. The first draft of this assertion checked that the default did not
+    # mention `REPO_ROOT`, and the default is `REPO_ROOT.parent / ...` -- which
+    # is correct and would have failed it. What matters is the resolved path,
+    # not how it is spelled.
+    parser = main.__globals__["argparse"].ArgumentParser()
+    source = (REPO_ROOT / "tools" / "build_authoring_packet.py").read_text(encoding="utf-8")
+    assert 'default=REPO_ROOT.parent / "holdout-authoring-packet"' in source, (
+        "the --out default has moved; re-read it before trusting the assertion below"
+    )
+    default = REPO_ROOT.parent / "holdout-authoring-packet"
+    assert REPO_ROOT not in default.parents, (
+        "the packet's default output directory is inside this repository, so a default build "
+        "could be committed by accident"
+    )
+    assert HARNESS.resolve() not in default.resolve().parents, (
+        "the packet's default output directory is inside the harness repository"
+    )
+    for ancestor in [default, *default.parents]:
+        assert not (ancestor / ".git").exists() or ancestor == default, (
+            f"the packet's default output directory sits inside a git tree at {ancestor}"
+        )
+    assert parser is not None
+
+
+# --------------------------------------------------------------------------
+# Agent personas, the fifth convention, and the one that had no declaration
+# --------------------------------------------------------------------------
+
+_PERSONAS_FILE: Final[Path] = REPO_ROOT / "PERSONAS"
+
+
+@requires_harness
+def test_every_persona_used_here_is_declared() -> None:
+    """The convention the other four could not be ported alongside.
+
+    The harness's `test_every_agent_persona_is_declared` holds Class 1 in free
+    speech: a persona is invented under the same substitution policy as the
+    platform name, appears in every call, and was declared nowhere until a sweep
+    counted them. Its register lists the *design* set's. This set uses others.
+
+    **Skipped, loudly, until the declaration exists.** Porting the check with no
+    `PERSONAS` file would commit a knowingly red build, and skipping quietly
+    would be the hiding place this repository refuses everywhere else. The skip
+    names the command that ends it, and the moment the file lands this becomes
+    an ordinary check with nothing conditional about it.
+
+    **Producing that file needs no reader.** The extraction is deterministic, so
+    a program writes it -- which is why this is a skip waiting on one command
+    rather than an obligation waiting on a cleared session.
+    """
+    if not _PERSONAS_FILE.is_file():
+        pytest.skip(
+            "PERSONAS does not exist yet, so there is nothing to check personas against. "
+            "Run `python tools/declare_personas.py` and commit the result, adding PERSONAS "
+            "to the tracked-file allowlist in .github/workflows/checks.yml in the same commit."
+        )
+
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    from declare_personas import personas
+
+    assert HARNESS is not None
+    declared = {
+        line.strip()
+        for line in _PERSONAS_FILE.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    declared |= set(
+        re.findall(
+            r"\*\*([A-Z][a-z]+)\*\*",
+            (HARNESS / "corpus" / "entities.md").read_text(encoding="utf-8"),
+        )
+    )
+    assert declared, "neither PERSONAS nor the register yields any name"
+
+    used = personas()
+    expected = {path.stem for path in _transcripts()}
+    missing = sorted(expected - set(used))
+    assert not missing, (
+        f"no agent persona could be read from {missing}; either the agent stopped introducing "
+        "itself or the phrasing changed and this check has gone half-blind"
+    )
+    undeclared = sorted(set(used.values()) - declared)
+    assert not undeclared, (
+        f"personas used here and declared nowhere: {undeclared}. Re-run "
+        "`python tools/declare_personas.py` and commit, or add them to the harness register"
+    )
+
+
+@requires_harness
+def test_the_persona_pattern_still_matches_the_harness_one() -> None:
+    """Another copy, and the same remedy the other two copies get.
+
+    `declare_personas.PERSONA_PATTERN` is a copy of the expression inside the
+    harness's `_agent_personas`, for the reason every port here is a copy: it is
+    a private helper in a test tree. If the harness widens the pattern -- a
+    second way for an agent to introduce itself -- and this does not, the
+    generator writes a short list, the check above passes against it, and the
+    convention is enforced against a subset nobody chose.
+
+    This binds them without needing the harness's helper to be importable, and
+    it is deliberately compared as the pattern rather than as behaviour: the two
+    read different corpora, so equal outputs would prove nothing.
+    """
+    assert HARNESS is not None
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    from declare_personas import PERSONA_PATTERN
+
+    source = (HARNESS / "tests" / "test_corpus_hygiene.py").read_text(encoding="utf-8")
+    theirs = re.search(r're\.search\(\s*r"(\\bthis is [^"]+)"', source)
+    assert theirs, (
+        "the harness's persona pattern is no longer written in the shape this reads; "
+        "re-read _agent_personas before trusting the copy in tools/declare_personas.py"
+    )
+    assert PERSONA_PATTERN.pattern == theirs.group(1), (
+        f"the persona pattern here is {PERSONA_PATTERN.pattern!r} and the harness's is "
+        f"{theirs.group(1)!r}. Two copies of one rule have diverged"
     )

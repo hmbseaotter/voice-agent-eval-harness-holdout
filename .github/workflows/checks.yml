@@ -15,6 +15,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only by default, and one run per ref. Both siblings carry these and this
+# workflow did not -- which matters more here than there: a token with write
+# scope in a job that checks out a second repository is a wider blast radius
+# than a token that can only read.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   holdout:
     runs-on: ubuntu-latest
@@ -45,29 +56,90 @@ jobs:
           path: .harness
           token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
 
-      - name: The set is exactly CALL-13 through CALL-17 and CALL-21
+      - name: Every transcript is named as one, and there is at least one
+        # **This enumerated the members until 2026-09-07** -- a count of six and
+        # a literal `for n in 13 14 15 16 17 21`. D83 knew the hazard and stated
+        # it as a duty: "adding a sixth must update that step rather than
+        # suppress it". A step that has to be edited whenever the set grows is
+        # the shape this project has now repaired in five documents, and there
+        # is no reason for the one enforcement point to keep it.
+        #
+        # Membership is checked against `HELDOUT_SET` below, which is the
+        # declaration and the only thing entitled to say who the members are.
+        # This step holds what can be held without it: the files are named like
+        # transcripts, and the directory is not empty -- so a set that lost every
+        # member fails here rather than passing an emptier comparison later.
         run: |
           set -eu
-          found=$(ls transcripts/CALL-*.txt | wc -l)
-          test "$found" -eq 6 || { echo "expected 6 transcripts, found $found"; exit 1; }
-          for n in 13 14 15 16 17 21; do
-            test -f "transcripts/CALL-$n.txt" || { echo "missing CALL-$n.txt"; exit 1; }
-          done
-          echo "6 transcripts, CALL-13 through CALL-17 and CALL-21"
-
-      - name: No labels exist before the freeze
-        # The real guard here. D21 withholds the labels until after
-        # `rubric-frozen-v1`, and "the labels do not exist yet" was a promise
-        # rather than a check. A file matching these names failing the build is
-        # what makes it a check.
-        run: |
-          set -eu
-          if ls labels* label-* *labels*.json *labels*.yaml 2>/dev/null | grep -q .; then
-            echo "a labels-shaped file exists in the held-out repository before the freeze"
-            ls labels* label-* *labels*.json *labels*.yaml 2>/dev/null
+          found=$(git ls-files 'transcripts/CALL-*.txt' | wc -l)
+          test "$found" -gt 0 || { echo "no transcripts are tracked"; exit 1; }
+          bad=$(git ls-files transcripts | grep -Ev '^transcripts/CALL-[0-9]{2}\.txt$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::files under transcripts/ that are not named as transcripts:"
+            echo "$bad"
             exit 1
           fi
-          echo "no labels-shaped file present"
+          echo "$found transcripts, every one named CALL-NN.txt"
+
+      - name: This repository tracks exactly what it is supposed to track
+        # The real guard here. D21 withholds the labels until after
+        # `rubric-frozen-v1`, and "the labels do not exist yet" was a promise
+        # rather than a check.
+        #
+        # **This was a denylist and it was two things wrong.** It globbed
+        # `labels* label-* *labels*.json *labels*.yaml` **in the repository root
+        # only**, so `transcripts/CALL-13.labels.yaml` passed it; and it matched
+        # on names, so `gold.yaml`, `annotations/` and `ground_truth.md` passed
+        # it too. A guard against a file nobody has written yet cannot work by
+        # guessing what it will be called.
+        #
+        # Inverted to an allowlist over **tracked** files. Anything that is not
+        # on this list fails the build, whatever it is called and wherever it
+        # sits -- labels, a stray authoring packet, a scratch note. Shorter,
+        # stronger, and it cannot be defeated by a rename.
+        run: |
+          set -eu
+          expected=$(printf '%s\n' \
+            .github/workflows/checks.yml \
+            .gitignore \
+            LICENSE \
+            README.md \
+            ruff.toml \
+            tests/test_holdout_conventions.py \
+            tools/build_authoring_packet.py \
+            tools/declare_personas.py \
+            | sort)
+          transcripts=$(git ls-files 'transcripts/CALL-*.txt' | sort)
+          test -n "$transcripts" || { echo "no transcripts are tracked"; exit 1; }
+          actual=$(git ls-files | sort)
+          allowed=$(printf '%s\n%s\n' "$expected" "$transcripts" | sort)
+          if ! diff -u <(echo "$allowed") <(echo "$actual"); then
+            echo "::error::this repository tracks a file that is not on the allowlist above."
+            echo "::error::If it is a labels file it must not exist before rubric-frozen-v1 (D21)."
+            echo "::error::If it is something else, add it to the list in this workflow first."
+            exit 1
+          fi
+          echo "tracked files are exactly the allowlist"
+
+      - name: HELDOUT_SET in the harness matches the transcripts here
+        # The standing duty in the harness's `HOLDOUT-OBLIGATIONS.md`: that file
+        # is a manual mirror of this directory, kept in a repository that cannot
+        # see this one. This is the only place both sides are visible, so it is
+        # the only place the mirror can be checked -- and identifiers are
+        # metadata, which is why the harness may hold them at all.
+        if: hashFiles('.harness/pyproject.toml') != ''
+        run: |
+          set -eu
+          declared=$(grep -v '^[[:space:]]*#' .harness/HELDOUT_SET | grep -v '^[[:space:]]*$' \
+            | tr -d '[:blank:]' | sort)
+          actual=$(git ls-files 'transcripts/CALL-*.txt' | xargs -n1 basename | sed 's/\.txt$//' \
+            | sort)
+          if ! diff -u <(echo "$declared") <(echo "$actual"); then
+            echo "::error::HELDOUT_SET in the harness does not match the transcripts here."
+            echo "::error::It is a manual mirror and it has gone stale -- update it there."
+            exit 1
+          fi
+          echo "HELDOUT_SET matches this directory"
 
       - name: Set up Python
         if: hashFiles('.harness/pyproject.toml') != ''
@@ -112,6 +184,26 @@ jobs:
           set -eu
           python -m pip install --quiet pytest
           HARNESS_ROOT=.harness python -m pytest tests -v
+
+      - name: Lint, format and type-check this repository's own Python
+        # There was no gate of any kind until 2026-09-07, and no configuration
+        # either -- so ruff's defaults applied and the only honest description
+        # of the lint state was that nobody had ever run it. Under the harness's
+        # own settings this repository had 12 findings, one file that would be
+        # reformatted, and a strict-mypy error in the "verbatim" copy of
+        # `_sourced_by`, which had dropped its parameter annotations. That last
+        # one is the interesting one: the copy was failing the type check *of
+        # the thing it claims to be a copy of*.
+        #
+        # `ruff.toml` mirrors the harness's configuration, so "held to the
+        # harness's standards" is a file rather than a sentence in a brief.
+        if: hashFiles('.harness/pyproject.toml') != ''
+        run: |
+          set -eu
+          python -m pip install --quiet ruff mypy
+          ruff check .
+          ruff format --check .
+          mypy --strict --ignore-missing-imports tests tools
 
       - name: Fail when the harness was not available
         # This was a warning, and the warning is precisely what let this repository
