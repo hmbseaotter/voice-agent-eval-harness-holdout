@@ -95,6 +95,46 @@ and two copies of a rule are two things that can disagree. That weakness is stat
 docstring rather than left to be discovered, and the fix, if anyone wants it, is for the rule to move
 into the `harness` package so both repositories import one implementation.
 
+## Replacing the token
+
+`HARNESS_READ_TOKEN` is the only secret this repository holds. The paragraph above says what it is
+for; this says how to make another, because it will need one.
+
+GitHub → your avatar → **Settings** → **Developer settings** → **Personal access tokens** →
+**Fine-grained tokens** → **Generate new token**, or go straight to
+<https://github.com/settings/personal-access-tokens/new>.
+
+| field | value |
+|---|---|
+| Resource owner | `hmbseaotter` |
+| Repository access | **Only select repositories** → `voice-agent-eval-harness` |
+| Permissions | **Repository permissions** → `Contents: Read-only`, and nothing else |
+| Expiration | your choice — **write the date down** |
+
+Copy it on the page that follows; GitHub will not show it again. Then install it here: this
+repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**,
+named exactly `HARNESS_READ_TOKEN`.
+
+**On the day it expires** the harness checkout fails, every step that reads a transcript fails with
+it, and the build goes red naming what is missing. That is the intended behavior rather than a
+regression — the alternative is the one this repository shipped until 2026-09-06, a green build that
+checked nothing.
+
+## What this repository depends on
+
+| | |
+|---|---|
+| [`voice-agent-eval-harness`](https://github.com/hmbseaotter/voice-agent-eval-harness) | the transcript format and the adapter these transcripts are parsed by; the conventions `tests/test_holdout_conventions.py` ports; and `HELDOUT_SET`, which names this set's call identifiers over there because nothing over there can discover them |
+| [`comparative-judgment`](https://github.com/hmbseaotter/comparative-judgment) | nothing directly. It scores the *design* set's findings, and this repository has no findings yet |
+
+Every one of those is a dependency **this repository's own suite cannot check**. That is what
+`HOLDOUT-OBLIGATIONS.md` in the harness is for: a convention can change there and leave this set out
+of step, with a green build on both sides.
+
+**Three repositories share three tokens, and the map of which grants what lives in the harness's
+README**, under *Access: three fine-grained tokens*. It is there rather than here because the harness
+is the hub — the only one of the three that talks to both others.
+
 ## Committing to this repository
 
 The `.gitignore` above calls the global pre-commit secret guard "the backstop" and this file "the
