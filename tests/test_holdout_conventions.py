@@ -35,6 +35,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import copy
+import dataclasses
 import itertools
 import os
 import re
@@ -382,6 +383,52 @@ _EVENT_SCOPED_FIELDS: Final[tuple[str, ...]] = ("event_title", "door_time")
 
 
 @requires_harness
+def _event_scoped_disagreements(calls: list[Call]) -> tuple[list[str], dict[str, int]]:
+    """`(disagreements, comparisons made per field)` over calls sharing an `event_id`.
+
+    Separated from its test so the control below can run **this** code over a
+    corpus it has mutated. A control that re-runs a copy of the loop proves
+    nothing about the loop, and a check whose only evidence is that it has
+    never fired has been proven against nothing.
+
+    Deliberately the same signature as the harness's helper of this name, so
+    that the two stay comparable by reading.
+    """
+    seen: dict[tuple[str, str], dict[str, str]] = {}
+    problems: list[str] = []
+    compared: dict[str, int] = {}
+    for call in calls:
+        context = dict(call.context)
+        event_id = context.get("event_id")
+        if not event_id:
+            continue
+        for field in _EVENT_SCOPED_FIELDS:
+            value = context.get(field)
+            if value is None:
+                continue
+            previous = seen.setdefault((event_id, field), {})
+            for other_call, other_value in previous.items():
+                compared[field] = compared.get(field, 0) + 1
+                if other_value != value:
+                    problems.append(
+                        f"{event_id} has {field}={value!r} in {call.record.call_id} "
+                        f"and {other_value!r} in {other_call}"
+                    )
+            previous[call.record.call_id] = value
+    return problems, compared
+
+
+def _uncompared_fields(compared: dict[str, int]) -> list[str]:
+    """Event-scoped fields no pair of calls was compared on.
+
+    This is the floor's predicate, and it is a function rather than a loop
+    inside the test so that the control runs **it**. A control that restates
+    the arithmetic in its own assertion proves the arithmetic; only one that
+    calls this can say the floor would have fired.
+    """
+    return [field for field in _EVENT_SCOPED_FIELDS if compared.get(field, 0) < 1]
+
+
 def test_one_event_id_means_one_event() -> None:
     """Two calls naming the same `event_id` must agree about that event.
 
@@ -418,15 +465,15 @@ def test_one_event_id_means_one_event() -> None:
     explicitly, with its reason, rather than inheriting a hole sized for another
     corpus.
 
-    **The floor is an aggregate, and that is a known weakness.** Two sets this
-    size may legitimately share no identifier at all, in which case this
-    compares nothing -- and silence should not read as agreement, so it says so
-    rather than passing quietly. But it counts comparisons across every field in
-    `_EVENT_SCOPED_FIELDS` together: were `door_time` to stop being compared
-    while `event_title` still was, the total would stay non-zero and this would
-    stay green. The harness's counterpart asserts a **per-field** minimum for
-    that reason (D74). Narrowing this one to match is worth doing, and is not
-    done here.
+    **The floor is per field, not one total.** Two sets this size may
+    legitimately share no identifier at all, in which case this compares
+    nothing -- and silence should not read as agreement, so the check says so
+    rather than passing quietly. Counting per field matters beyond that: an
+    aggregate stays non-zero while one field quietly stops being compared, so
+    `event_title` alone could hold the total up while `door_time` went
+    unchecked, and `door_time` is the field this check exists about. That is
+    D74's per-document minimum arriving one noun over, and the control below
+    plants the case rather than assuming it.
 
     **This docstring was rewritten on 2026-09-07 and its predecessor was not
     read.** An audit found held-out content living in it -- an account of a
@@ -437,35 +484,74 @@ def test_one_event_id_means_one_event() -> None:
     """
     from harness.corpus.text_adapter import parse_call
 
-    seen: dict[tuple[str, str], dict[str, str]] = {}
-    problems: list[str] = []
-    compared = 0
-    for transcript in _transcripts():
-        call = parse_call(transcript)
-        context = dict(call.context)
-        event_id = context.get("event_id")
-        if not event_id:
-            continue
-        for field in _EVENT_SCOPED_FIELDS:
-            value = context.get(field)
-            if value is None:
-                continue
-            previous = seen.setdefault((event_id, field), {})
-            for other_call, other_value in previous.items():
-                compared += 1
-                if other_value != value:
-                    problems.append(
-                        f"{event_id} has {field}={value!r} in {call.record.call_id} "
-                        f"and {other_value!r} in {other_call}"
-                    )
-            previous[call.record.call_id] = value
-
-    assert compared, (
-        "no two transcripts share an event id, so this check compared nothing. That is a "
-        "legitimate state for a set this small -- but it means a contradiction could not "
-        "be detected, and silence should not read as agreement."
-    )
+    problems, compared = _event_scoped_disagreements([parse_call(t) for t in _transcripts()])
     assert not problems, "one event id, two events:\n  " + "\n  ".join(problems)
+
+    blind = _uncompared_fields(compared)
+    assert not blind, (
+        f"no two transcripts share an event id and both carry {', '.join(blind)}, so "
+        "this check compared nothing for those fields. That is a legitimate state for "
+        "a set this small -- but it means a contradiction there could not be detected, "
+        "and silence should not read as agreement."
+    )
+
+
+def test_the_event_scoped_floor_fires_on_a_field_that_stopped_being_compared() -> None:
+    """The per-field floor, planted rather than assumed.
+
+    An aggregate floor is green as long as *some* field is compared, so a field
+    that quietly stops being compared hides inside a non-zero total. The floor
+    above counts per field for that reason, and a floor observed only to pass
+    is in the position D85's narrower check was in: proven against nothing.
+
+    So `door_time` is stripped from every context and the real helper is run
+    over the result, and then `_uncompared_fields` -- the floor's own predicate,
+    not a restatement of it -- is asked what it names. Two things must hold. It
+    must name `door_time` and nothing else, which is the reading the floor
+    rejects. And the comparison total must stay non-zero, because that is what
+    makes this a control *for a per-field minimum* rather than for any floor at
+    all: had every field stopped comparing, an aggregate would have caught it
+    too and this would demonstrate nothing.
+
+    **No transcript is read to build this.** The strip is done on the parsed
+    calls, so the control never needs to know what any `door_time` says. The
+    harness's counterpart plants a pre-repair value into a copy of a transcript
+    instead, which is available to it and is not available here.
+    """
+    from harness.corpus.text_adapter import parse_call
+
+    field = "door_time"
+    assert field in _EVENT_SCOPED_FIELDS, "the premise of this control has changed"
+
+    calls = [parse_call(t) for t in _transcripts()]
+    _, before = _event_scoped_disagreements(calls)
+    assert not _uncompared_fields(before), (
+        "a field is uncompared before anything is stripped, so this control would "
+        "pass for the wrong reason"
+    )
+
+    stripped = [
+        dataclasses.replace(
+            call,
+            context=tuple((k, v) for k, v in call.context if k != field),
+            context_source_lines=tuple(
+                lines
+                for (k, _), lines in zip(call.context, call.context_source_lines, strict=True)
+                if k != field
+            ),
+        )
+        for call in calls
+    ]
+
+    _, after = _event_scoped_disagreements(stripped)
+    assert _uncompared_fields(after) == [field], (
+        f"the floor's own predicate does not name {field} once it is stripped, so the "
+        "per-field minimum would not have fired on the case this plants"
+    )
+    assert sum(after.values()) >= 1, (
+        "every field stopped comparing, so an aggregate floor would have caught this "
+        "too, and the control demonstrates nothing about per-field minimums"
+    )
 
 
 @requires_harness
