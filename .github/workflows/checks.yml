@@ -103,6 +103,7 @@ jobs:
             .github/workflows/checks.yml \
             .gitignore \
             LICENSE \
+            PERSONAS \
             README.md \
             ruff.toml \
             tests/test_holdout_conventions.py \
@@ -184,6 +185,16 @@ jobs:
           set -eu
           python -m pip install --quiet pytest
           HARNESS_ROOT=.harness python -m pytest tests -v
+
+      - name: The persona declaration is current
+        # `PERSONAS` is generated, not written. Without this step it is a file
+        # somebody has to remember to regenerate, which is the class of failure
+        # `HOLDOUT-OBLIGATIONS.md` exists to record -- and a persona used and
+        # undeclared silently narrows every check keyed to the list.
+        if: hashFiles('.harness/pyproject.toml') != ''
+        run: |
+          set -eu
+          python tools/declare_personas.py --check
 
       - name: Lint, format and type-check this repository's own Python
         # There was no gate of any kind until 2026-09-07, and no configuration
