@@ -12,3 +12,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+
+# A per-machine log of `claude --resume` invocations. Tool-generated,
+# names session ids, and belongs to nobody's checkout but this one.
+# Carried over from the severity tool, which already ignored it while this
+# repository did not -- so `git add -A` here could have committed it.
+resume_session.txt
