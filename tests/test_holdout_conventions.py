@@ -187,20 +187,49 @@ def _sourced_by(call: Call, event: ToolCallEvent, value: str) -> str | None:
 def test_no_tool_call_argument_appears_from_nowhere() -> None:
     """Every value the agent passes to a tool must have a source in the call.
 
-    The held-out set carried one of these when the check was ported:
-    `reserve_seats` took a bare seat count that no context value, no prior
-    result and no arithmetic over the call's numbers produced. It was repaired
-    the way the design set's `CALL-09` was -- not by deleting the argument, but
-    by keying the call on something the transcript already established.
+    D64's rule, ported. `_sourced_by` looks in exactly five places -- a context
+    value, a field of the call record, earlier caller or agent speech, an
+    earlier tool result, or arithmetic over context values -- and returns the
+    one it found. Where it finds none, the agent has asserted a value rather
+    than obtained one, and a transcript where that passes unremarked teaches a
+    judge that an identifier arriving from nowhere is ordinary.
 
-    Worth recording for whoever reads a future failure here: **no bare integer
-    of one or two characters can ever pass this check.** The speech and
-    prior-event paths require three characters, and the arithmetic path sums
-    context numbers rather than subtracting them. That is deliberate -- the
-    length floor is what stopped `clause="2.2"` matching `ticket_count=2` and
-    hiding five real cases -- but it means a small-integer argument has no
-    honest repair available, only a coincidental match. The repair is to change
-    what the argument *is*, not to widen the check.
+    Only earlier events count, and `_sourced_by`'s own docstring gives the
+    reason: a value first seen in the *result* of the call that used it has not
+    been sourced, it has been asserted and then confirmed.
+
+    **What is examined, and therefore what is not.** The pattern reads quoted
+    arguments, `name="value"`, so an unquoted argument is not examined at all.
+    That is narrower than the rule this docstring opens with, and it is written
+    down here rather than left for a reader to infer from the regex.
+
+    **The floor is not decoration.** A parser change, or an argument syntax that
+    stopped matching, would leave this loop iterating over nothing and reporting
+    no problems. An empty comparison reads exactly like a passing one, so the
+    check asserts that it examined something before it asserts that what it
+    examined was clean.
+
+    **Two rules govern the exception list, and each is enforced separately.**
+    Every entry in `_UNSOURCED_ARGUMENTS_ALLOWED` carries a reason, and this
+    test asserts the reason is non-empty, because an exemption nobody has to
+    justify is one that grows. A sibling,
+    `test_the_provenance_exceptions_are_all_still_used`, fails when an entry
+    stops matching anything, because an exception nobody needs is an exception
+    nobody rechecks (D64).
+
+    `_sourced_by` is a copy rather than an import, since it is a private helper
+    inside the harness's own test tree. The copy is held to the original by
+    `test_the_copied_provenance_helper_is_the_same_code_as_the_harness_one`,
+    which compares the two as abstract syntax trees -- comparing text would fail
+    on formatting, and comparing behaviour would need inputs neither repository
+    can share.
+
+    **This docstring was rewritten on 2026-09-07 and its predecessor was not
+    read.** An audit found held-out content living in it -- an account of what a
+    repair had found -- outside `transcripts/`, where the read prohibition did
+    not reach. The replacement was composed from this function's own body and
+    from rules already published in the harness, so that removing the content
+    did not require anybody to read it.
     """
     from harness.core.events import ToolCallEvent
     from harness.corpus.text_adapter import parse_call
@@ -356,25 +385,55 @@ _EVENT_SCOPED_FIELDS: Final[tuple[str, ...]] = ("event_title", "door_time")
 def test_one_event_id_means_one_event() -> None:
     """Two calls naming the same `event_id` must agree about that event.
 
-    The harness has `test_one_event_title_per_event_id_except_where_drift_is_
-    seeded`, and it compares **titles**. Ported here as-is it would have passed
-    while this set contained a real contradiction: two calls shared an event id
-    and its title and disagreed about the door time, one of them placing the
-    show four days before the call that was arranging to attend it. Same guard,
-    same event id, narrower field list -- green, and blind to the field that
-    actually differed.
+    One identifier means one performance, so the fields describing the *event*
+    rather than the booking must match wherever the identifier is reused.
+    `_EVENT_SCOPED_FIELDS` is deliberately not every shared field:
+    `ticket_count`, `booking_reference` and the rest belong to one caller's
+    purchase, and two callers holding seats to one show are expected to differ
+    on them.
 
-    So this compares every field scoped to the event, not just the one the
-    original happened to pick. `door_time` is the field that matters most,
-    because it is what every deadline in the policy set is measured against: a
-    transfer window closes 24 hours before it, and an agent reasoning about that
-    window against the wrong date reasons correctly to a wrong answer.
+    **`door_time` is the field that most needed including.** Deadlines in the
+    policy set are measured against it -- in the design set, `exchange.v1` 2.1
+    closes the exchange window 48 hours before the doors open -- so an agent
+    reasoning about a window against the wrong door time reasons correctly to a
+    wrong answer, and the transcript reads as though the agent erred.
 
-    The harness's own version carries a seeded-drift exemption, and this one
-    deliberately does not. Naming drift is a *design*-set defect class; a
-    held-out transcript that needs an exemption here should get one added
-    explicitly, with the reason, rather than inheriting a hole sized for another
+    **A titles-only guard would have passed here, which is why this one
+    exists.** D85 is the record: two calls in this set shared an `event_id` and
+    an `event_title` and disagreed about `door_time`, so a check comparing names
+    ran, compared, and reported nothing on exactly the transcripts carrying the
+    contradiction.
+
+    **The widening started here and reached the harness afterwards.** D85
+    widened this port first, because the contradiction surfaced in this set;
+    `tests/test_corpus_hygiene.py::test_one_event_id_means_one_event` was added
+    to the harness later, when the same undeclared drift was found in the design
+    corpus. The harness keeps
+    `test_one_event_title_per_event_id_except_where_drift_is_seeded` alongside
+    it -- a separate guard over names, not a superseded one.
+
+    **No seeded-drift exemption here, deliberately.** The harness's version
+    carries one because naming drift is a seeded defect class in the *design*
+    set. A transcript here that needs an exemption should get one added
+    explicitly, with its reason, rather than inheriting a hole sized for another
     corpus.
+
+    **The floor is an aggregate, and that is a known weakness.** Two sets this
+    size may legitimately share no identifier at all, in which case this
+    compares nothing -- and silence should not read as agreement, so it says so
+    rather than passing quietly. But it counts comparisons across every field in
+    `_EVENT_SCOPED_FIELDS` together: were `door_time` to stop being compared
+    while `event_title` still was, the total would stay non-zero and this would
+    stay green. The harness's counterpart asserts a **per-field** minimum for
+    that reason (D74). Narrowing this one to match is worth doing, and is not
+    done here.
+
+    **This docstring was rewritten on 2026-09-07 and its predecessor was not
+    read.** An audit found held-out content living in it -- an account of a
+    contradiction this check was written after -- outside `transcripts/`, where
+    the read prohibition did not reach. The replacement was composed from this
+    function's own body and from rules already published in the harness, so that
+    removing the content did not require anybody to read it.
     """
     from harness.corpus.text_adapter import parse_call
 
