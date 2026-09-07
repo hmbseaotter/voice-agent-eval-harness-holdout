@@ -77,15 +77,22 @@ REDACTIONS: list[tuple[str, str]] = [
         "**`escalated`** fills a gap worth recording",
     ),
     (
+        # Re-targeted 2026-09-07. The harness rewrote this sentence at D89 -- it
+        # had counted the calls carrying `caller_ani` and counted the wrong
+        # population -- and the previous pattern, an exact string, matched
+        # nothing from that moment. The leak scan is what would have caught it,
+        # at the next build; `test_every_redaction_still_matches_the_harness`
+        # now catches it on every run instead.
         (
-            "Thirteen design calls carry `caller_ani`; CALL-18 carries `booking_reference`, "
-            "because the\ncaller there is not the account holder and the number they call from "
-            "is not on the account.\nThat difference is the whole subject of that call and "
-            "closing the vocabulary would have made\nit unstateable."
+            "Every design call is matched on `caller_ani` except CALL-18, which is matched on\n"
+            "`booking_reference`, because the caller there is not the account holder and the "
+            "number they call\nfrom is not on the account. That difference is the whole subject "
+            "of that call and closing the\nvocabulary would have made it unstateable."
         ),
         (
-            "Most design calls carry `caller_ani`; at least one carries `booking_reference` "
-            "instead,\nbecause the caller there is not the account holder. "
+            "Every design call is matched on `caller_ani` except one, which is matched on\n"
+            "`booking_reference`, because the caller there is not the account holder and the "
+            "number they call\nfrom is not on the account. "
             + MARK.format("the rest identified a design transcript and its subject")
         ),
     ),
@@ -122,6 +129,15 @@ LINE_REDACTIONS: list[tuple[re.Pattern[str], str]] = [
         # the held-out set grows.
         re.compile(r"`CALL-\d{2}` was added on .*?contiguous range\.\*\*", re.DOTALL),
         MARK.format("a note on how the two sets share one numbering space"),
+    ),
+    (
+        # The worked example in the event model names a design transcript. This
+        # lived inline in `build()` until 2026-09-07, where the staleness test
+        # could not see it -- a redaction outside the list is a redaction
+        # nothing checks, which is the same shape as the pattern that had
+        # already gone stale.
+        re.compile(r"CALL-\d{2} is the worked example.*?anyway\.", re.DOTALL),
+        MARK.format("the worked example named a design transcript and its seeded defect"),
     ),
 ]
 
@@ -259,15 +275,6 @@ def build(harness: Path, out: Path, assignment: str, assignment_title: str) -> i
                 text = text.replace(old, new)
         for pattern, replacement in LINE_REDACTIONS:
             text = pattern.sub(replacement, text)
-        # The worked example in the event model names a design transcript.
-        text = re.sub(
-            r"CALL-\d{2} is the worked example.*?anyway\.",
-            MARK.format(
-                "the worked example named a design transcript and its seeded defect"
-            ),
-            text,
-            flags=re.DOTALL,
-        )
         target.write_text(text, encoding="utf-8")
 
     transcripts = sorted((REPO_ROOT / "transcripts").glob("CALL-*.txt"))
