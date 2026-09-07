@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the held-out set
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check out the harness alongside it
         # The default GITHUB_TOKEN is scoped to THIS repository and cannot read a
@@ -49,7 +49,7 @@ jobs:
         # `continue-on-error` stays, deliberately: the guard below reports "the
         # checks did not run" in the workflow's own words, which is a clearer
         # failure than a raw checkout error.
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         continue-on-error: true
         with:
           repository: hmbseaotter/voice-agent-eval-harness
@@ -144,7 +144,7 @@ jobs:
 
       - name: Set up Python
         if: hashFiles('.harness/pyproject.toml') != ''
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
