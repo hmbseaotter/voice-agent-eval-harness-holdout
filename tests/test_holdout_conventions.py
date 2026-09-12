@@ -382,7 +382,6 @@ def test_no_policy_retrieval_still_takes_a_clause() -> None:
 _EVENT_SCOPED_FIELDS: Final[tuple[str, ...]] = ("event_title", "door_time")
 
 
-@requires_harness
 def _event_scoped_disagreements(calls: list[Call]) -> tuple[list[str], dict[str, int]]:
     """`(disagreements, comparisons made per field)` over calls sharing an `event_id`.
 
@@ -429,6 +428,7 @@ def _uncompared_fields(compared: dict[str, int]) -> list[str]:
     return [field for field in _EVENT_SCOPED_FIELDS if compared.get(field, 0) < 1]
 
 
+@requires_harness
 def test_one_event_id_means_one_event() -> None:
     """Two calls naming the same `event_id` must agree about that event.
 
@@ -496,6 +496,7 @@ def test_one_event_id_means_one_event() -> None:
     )
 
 
+@requires_harness
 def test_the_event_scoped_floor_fires_on_a_field_that_stopped_being_compared() -> None:
     """The per-field floor, planted rather than assumed.
 
