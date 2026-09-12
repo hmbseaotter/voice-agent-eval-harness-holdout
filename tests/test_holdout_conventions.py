@@ -43,7 +43,7 @@ import shutil
 import sys
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:  # pragma: no cover - types only, and the harness may be absent
     # Annotations only. A runtime import would break collection wherever the
@@ -1163,6 +1163,144 @@ def test_the_copied_provenance_helper_is_the_same_code_as_the_harness_one() -> N
         "the copy of _sourced_by here has diverged from the harness's. The two implement one "
         "convention and this suite would go green against a stale version of it. Re-copy it, "
         "or move the helper into the harness package so both import one implementation."
+    )
+
+
+def _assigned_literal(source: str, name: str) -> Any:
+    """The literal a module assigns to `name` at its top level, read without importing it.
+
+    `ast.literal_eval` accepts exactly the shapes these constants have and refuses
+    anything computed. That refusal is the right failure: a constant that stopped
+    being a literal has stopped being comparable this way, and should say so
+    rather than be compared some weaker way.
+    """
+    for node in ast.parse(source).body:
+        targets: list[ast.expr]
+        value: ast.expr | None
+        if isinstance(node, ast.AnnAssign):
+            targets, value = [node.target], node.value
+        elif isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        else:
+            continue
+        if value is not None and any(isinstance(t, ast.Name) and t.id == name for t in targets):
+            return ast.literal_eval(value)
+    raise LookupError(name)
+
+
+def _copied_constant_drift(harness_source: str) -> list[str]:
+    """The copied constants that no longer say what the harness's say.
+
+    Takes the harness module's source rather than reading it, so the control
+    below can hand it a module in which one constant has moved. A control that
+    restates the comparison proves the restatement.
+    """
+    theirs: dict[str, Any] = {}
+    problems: list[str] = []
+    for name in ("_UNSOURCED_ARGUMENTS_ALLOWED", "ESCALATION_RECORD", "_EVENT_SCOPED_FIELDS"):
+        try:
+            theirs[name] = _assigned_literal(harness_source, name)
+        except LookupError:
+            problems.append(f"{name} is no longer a top-level literal in the harness module")
+    if problems:
+        return problems
+
+    # The reasons are explanation, as `_sourced_by`'s docstring is; the rule is
+    # which (tool, argument) pairs may arrive with no source.
+    exceptions = theirs["_UNSOURCED_ARGUMENTS_ALLOWED"]
+    mine_pairs = {(tool, argument) for tool, argument, _ in _UNSOURCED_ARGUMENTS_ALLOWED}
+    their_pairs = {(tool, argument) for tool, argument, _ in exceptions}
+    if mine_pairs != their_pairs:
+        problems.append(
+            f"_UNSOURCED_ARGUMENTS_ALLOWED excepts {sorted(mine_pairs)} here and "
+            f"{sorted(their_pairs)} in the harness"
+        )
+    if theirs["ESCALATION_RECORD"] != _ESCALATION_RECORD:
+        problems.append(
+            f"_ESCALATION_RECORD is {_ESCALATION_RECORD} here and "
+            f"{theirs['ESCALATION_RECORD']} in the harness"
+        )
+    if tuple(theirs["_EVENT_SCOPED_FIELDS"]) != _EVENT_SCOPED_FIELDS:
+        problems.append(
+            f"_EVENT_SCOPED_FIELDS is {_EVENT_SCOPED_FIELDS} here and "
+            f"{tuple(theirs['_EVENT_SCOPED_FIELDS'])} in the harness"
+        )
+    return problems
+
+
+@requires_harness
+def test_the_copied_constants_still_match_the_harness() -> None:
+    """Three copied constants, held to the harness the way the copied helper is.
+
+    `_UNSOURCED_ARGUMENTS_ALLOWED`, `_ESCALATION_RECORD` and `_EVENT_SCOPED_FIELDS`
+    are copies of constants in the harness's `tests/test_corpus_hygiene.py`, and
+    two of them say they are kept identical on purpose. Until 2026-09-11 nothing
+    checked any of the three. A copy that drifts either holds this set to a rule
+    the design set no longer has or excuses here what the harness has stopped
+    excusing -- `HOLDOUT-OBLIGATIONS.md`'s failure mode, one layer down.
+
+    Read from the harness module's syntax tree rather than imported, for the
+    reason every port here is a copy: a test module is not an importable
+    interface. Compared as the rule each constant states, so for the exception
+    list that is its (tool, argument) pairs, with the reasons normalized away
+    the way `_sourced_by`'s docstring is.
+    """
+    assert HARNESS is not None
+    source = (HARNESS / "tests" / "test_corpus_hygiene.py").read_text(encoding="utf-8")
+    drift = _copied_constant_drift(source)
+    assert not drift, (
+        "a constant copied from the harness has diverged from it, so this suite is enforcing "
+        "a convention the design set no longer holds:\n  " + "\n  ".join(drift)
+    )
+
+
+def test_the_copied_constant_check_fires_on_a_constant_that_moved() -> None:
+    """The control, driven through `_copied_constant_drift` over modules it writes.
+
+    A module holding exactly this file's values must pass, and so must one whose
+    exception reasons are reworded, because a reason is explanation. Each of
+    three moves must be reported alone and by name -- an exception added, an
+    escalation field changed, an event-scoped field added -- and a constant the
+    harness renamed must be reported rather than compared against nothing.
+    """
+
+    def module(exceptions: object, escalation: object, scoped: object) -> str:
+        # One plain assignment and two annotated ones, so both shapes are read.
+        return (
+            f"_UNSOURCED_ARGUMENTS_ALLOWED = {exceptions!r}\n"
+            f"ESCALATION_RECORD: Final[dict[str, str]] = {escalation!r}\n"
+            f"_EVENT_SCOPED_FIELDS: Final[tuple[str, ...]] = {scoped!r}\n"
+        )
+
+    exceptions, escalation, scoped = (
+        _UNSOURCED_ARGUMENTS_ALLOWED,
+        _ESCALATION_RECORD,
+        _EVENT_SCOPED_FIELDS,
+    )
+    same = module(exceptions, escalation, scoped)
+    assert not _copied_constant_drift(same), "identical constants were reported as drift"
+
+    reworded = tuple((tool, arg, "reworded") for tool, arg, _ in exceptions)
+    assert not _copied_constant_drift(module(reworded, escalation, scoped)), (
+        "a reworded reason was reported as a changed rule"
+    )
+
+    moves = {
+        "_UNSOURCED_ARGUMENTS_ALLOWED": module(
+            (*exceptions, ("find_performance", "event", "planted")), escalation, scoped
+        ),
+        "ESCALATION_RECORD": module(exceptions, dict(escalation, outcome="unresolved"), scoped),
+        "_EVENT_SCOPED_FIELDS": module(exceptions, escalation, (*scoped, "venue")),
+    }
+    for name, planted in moves.items():
+        drift = _copied_constant_drift(planted)
+        assert len(drift) == 1 and name in drift[0], (
+            f"moving {name} was not reported alone: {drift}"
+        )
+
+    renamed = _copied_constant_drift(same.replace("ESCALATION_RECORD", "SOME_OTHER_RECORD"))
+    assert renamed and all("ESCALATION_RECORD" in problem for problem in renamed), (
+        f"a constant the harness renamed was not reported as missing: {renamed}"
     )
 
 
