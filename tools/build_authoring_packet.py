@@ -114,11 +114,16 @@ LINE_REDACTIONS: list[tuple[re.Pattern[str], str]] = [
         "Design set: " + MARK.format("the design set's call identifiers"),
     ),
     (
+        # Re-targeted 2026-09-11. The harness extended this note past the
+        # sentence the pattern ended on, so `list\.$` stopped matching and the
+        # paragraph, which names a design call, passed through to the scan. It
+        # now ends on the declaration line that follows the note rather than on
+        # a phrase inside it, because the phrase is the part that gets edited.
         re.compile(
-            r"^\*\*`corpus/DESIGN_SET` is the declaration.*?list\.$",
+            r"^\*\*`corpus/DESIGN_SET` is the declaration.*?\n(?=Held-out set: )",
             re.MULTILINE | re.DOTALL,
         ),
-        MARK.format("a note about the design set's declaration"),
+        MARK.format("a note about the design set's declaration") + "\n",
     ),
     (
         # Not anchored to a line start: this sentence begins mid-line, and the
@@ -126,8 +131,21 @@ LINE_REDACTIONS: list[tuple[re.Pattern[str], str]] = [
         # was caught by the scan rather than by review. Shape-based on the id
         # for the same reason -- a literal identifier goes stale the next time
         # the held-out set grows.
-        re.compile(r"`CALL-\d{2}` was added on .*?contiguous range\.\*\*", re.DOTALL),
+        #
+        # Runs to the end of the paragraph since 2026-09-11. It used to end on
+        # the sentence about the first shared identifier, and the harness then
+        # appended a second sentence about the next design call to the same
+        # paragraph, which this left behind with its identifier intact.
+        re.compile(r"`CALL-\d{2}` was added on .*?(?=\n[ \t]*\n|\Z)", re.DOTALL),
         MARK.format("a note on how the two sets share one numbering space"),
+    ),
+    (
+        # Added 2026-09-11. The register explains why three kinds of name were
+        # declared with an example naming a design transcript and the seeded
+        # defects two of those names carry. The declarations themselves stay,
+        # because they are vocabulary; only the example goes.
+        re.compile(r", and one of them mattered:.*?names the canon had never seen\.", re.DOTALL),
+        ". " + MARK.format("an example naming a design transcript and its seeded defects"),
     ),
     (
         # The worked example in the event model names a design transcript. This
