@@ -64,7 +64,8 @@ _HELD_OUT_PATTERN = re.compile(r"\bCALL-\d{2}\b")
 #: something was removed will believe they have the whole document, which is a
 #: worse failure than the leak being closed.
 #:
-#: Not asserted to match. See the module docstring: the scan is the gate.
+#: Asserted to match by `test_every_redaction_still_matches_the_harness`, as an early
+#: warning and nothing more: the scan is still the gate. See the module docstring.
 MARK = "**[Redacted by the packet builder: {}]**"
 
 REDACTIONS: list[tuple[str, str]] = [
@@ -256,9 +257,9 @@ view: write the call, not your view of it. The same applies to how the set is co
 ## When you are done
 
 1. Run the checks in this repository: `python -m pytest tests -q`, with the harness available.
-2. The workflow asserts the set is exactly the transcripts it names. Adding one makes that step
-fail,
-   correctly — it needs updating in the same change, not suppressing.
+2. The workflow checks this set's membership against `HELDOUT_SET` in the harness, which names
+   every held-out call. Adding one turns that step red, correctly, until the declaration names
+   the new call as well — the fix is the declaration, never suppressing the step.
 3. Expect a **resemblance check** afterwards, run by someone who can see both your call and the
    design set: event count, kind sequence, tool sequence, and where the defect sits. That check is
    what makes this packet's controls worth anything. Write the call you would write; do not try to

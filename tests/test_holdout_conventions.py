@@ -1,33 +1,38 @@
-"""The two conventions the harness enforces that this repository could not.
+"""Conventions the harness enforces on its own corpus, ported to a set its suite cannot reach.
 
 `HOLDOUT-REPAIR-BRIEF.md` states the case plainly: the harness's
 `tests/test_corpus_hygiene.py` globs `corpus/transcripts/`, which holds design
-calls only, so neither of the checks below had ever run against this tree. Both
-conventions were settled on 2026-09-01 and the five transcripts here at the time
+calls only, so none of its checks had ever run against this tree. The first two
+ported here were settled on 2026-09-01 and the five transcripts here at the time
 were authored before that, so for five days the rules existed and nothing
 compared them against these files. The brief's own sentence is the reason this
 file exists: *a repair with no check behind it is the state that produced this
-brief.*
+brief.* The rest followed as audits and the harness's `HOLDOUT-OBLIGATIONS.md`
+found more conventions in the same position.
 
-The set has since grown to six. Everything below globs the directory rather than
-naming members, so a transcript added later is covered the moment it lands
-instead of when someone remembers to widen a list.
+Everything below globs the directory rather than naming members, so a transcript
+added later is covered the moment it lands instead of when someone remembers to
+widen a list.
 
-**This is a port, and a port is two things that can disagree.** `_sourced_by`
-below is copied from `test_corpus_hygiene.py` rather than imported, because it
-is a private helper in that repository's test tree and a test module is not an
-importable interface. That duplication is the weakness of this file and it is
-better stated than hidden: if the rule changes there and not here, this suite
-goes green against a stale convention -- which is the shape of failure the
-obligations file was written to catch in the first place. The fix, if anyone
-wants it, is for `_sourced_by` to move into the `harness` package so both
-repositories import one implementation and this file deletes its copy.
+**This is a port, and a port is two things that can disagree.** Nothing here
+imports a rule from the harness's test tree, because a test module is not an
+importable interface, so every rule is a copy or a rewrite. If one changes there
+and not here, this suite goes green against a stale convention -- which is the
+shape of failure the obligations file was written to catch in the first place.
+What was copied verbatim is held to its original by a test that compares the two:
+`_sourced_by`, the speech constants, the three constants that shape the
+provenance, event and escalation checks, and the persona pattern in
+`tools/declare_personas.py`. What was rewritten as a port, the register checks
+among them, is held by nothing and can fall behind the harness without failing.
+The fix, if anyone wants it, is for the rules to move into the `harness` package
+so both repositories import one implementation.
 
-**The harness is a separate repository, and both checks need it** -- one for the
-parser, the other for `corpus/policies/`. When it is absent the tests skip with
-a message naming what did not run, matching the shape `.github/workflows/
-checks.yml` already uses for its parse step. A held-out set that could not be
-validated without a second repository being public would be a worse trade.
+**The harness is a separate repository, and most checks here need it** -- for the
+parser, `corpus/policies/`, the entity register, or the originals the copies are
+compared with. When it is absent those tests skip with a message naming what did
+not run, and the workflow fails the job rather than let the skips read as a pass.
+A held-out set that could not be validated without a second repository being
+public would be a worse trade.
 """
 
 from __future__ import annotations
@@ -934,15 +939,15 @@ _MINIMUM_WORDS_FOR_A_RATE: Final[int] = 4
 # Ported rather than imported, for the reason the module docstring already
 # gives: the harness's checks live in a test tree and a test module is not an
 # importable interface. Every port is two things that can disagree, so the ones
-# that copy a helper get an equality test rather than a promise.
+# that copy a helper or a constant get an equality test rather than a promise.
 #
-# **The persona check is deliberately absent.** It is the fifth convention and
-# the one the audit found *failing*: the agent personas used here are declared
-# nowhere -- not in the harness register, which lists the design set's, and not
-# in this repository, which has no declaration file. Porting it would commit a
-# knowingly red build. The declaration has to exist first, and producing it is
-# mechanical rather than a reading task; the harness's O-1 entry carries the
-# design.
+# **The persona check came last, and sits further down this file.** It is the
+# fifth convention and the one the audit found *failing*: the agent personas
+# used here were declared nowhere -- not in the harness register, which lists the
+# design set's, and not in this repository. Porting it first would have committed
+# a knowingly red build, so the declaration came first: `tools/declare_personas.py`
+# writes `PERSONAS` mechanically, with no reader, which is how the harness's O-8
+# entry was discharged.
 
 
 def _declared_in_register(section: str) -> set[str]:

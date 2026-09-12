@@ -62,13 +62,14 @@ it publish here, with the plaintext labels, at phase 5.
 
 ## What is checked here
 
-`.github/workflows/checks.yml` asserts three things itself: that the set is exactly `CALL-13`…`CALL-17` and `CALL-21`,
-that every transcript parses under the harness's current adapter with a zero unparsed-line count, and
-that **no labels-shaped file exists**. The last is the one that matters. D21 withholds the labels
-until after `rubric-frozen-v1`, and until now "they do not exist yet" was a promise rather than a
-check — a promise about a repository nobody was running anything against, since this one had no
-tests, no CI and no linter of any kind while the harness's own verifier carried a caveat saying its
-contents were *"asserted there"*.
+`.github/workflows/checks.yml` asserts, in its own steps, that the transcripts here are exactly the
+ones the harness's `HELDOUT_SET` declares, that every transcript parses under the harness's current
+adapter with a zero unparsed-line count, and that **nothing is tracked outside an allowlist** — so no
+labels file can exist, whatever it is called or wherever it sits. The last is the one that matters.
+D21 withholds the labels until after `rubric-frozen-v1`, and until now "they do not exist yet" was a
+promise rather than a check — a promise about a repository nobody was running anything against, since
+this one had no tests, no CI and no linter of any kind while the harness's own verifier carried a
+caveat saying its contents were *"asserted there"*.
 
 Every step that reads a transcript is conditional on the harness repository being checked out
 alongside, and **the build fails when it is not.** That was a warning until 2026-09-06, and the
@@ -83,12 +84,13 @@ nothing else — is what makes the checkout work. It also expires, and on the da
 would go quiet again; the failing step is what turns that reversion into a red build instead of a
 green one. This is the difference the repository keeps rediscovering, between a promise and a check.
 
-`tests/test_holdout_conventions.py` adds two conventions the harness enforces and this repository
-could not, because the harness's own suite globs `corpus/transcripts/` and so never reached this
-set: that **no tool-call argument enters a call from nowhere the transcript records**, and that
-**policy retrieval returns a whole document whose stated clause count is real**. Both were settled in
-the harness on 2026-09-01, after the first five were written; `HOLDOUT-OBLIGATIONS.md` there exists
-precisely because nothing on either side could detect the gap.
+`tests/test_holdout_conventions.py` ports conventions the harness enforces over its own corpus and
+could not enforce over this one, because the harness's own suite globs `corpus/transcripts/` and so
+never reaches this set. The first two were that **no tool-call argument enters a call from nowhere
+the transcript records**, and that **policy retrieval returns a whole document whose stated clause
+count is real** — both settled in the harness on 2026-09-01, after the first five were written. The
+rest arrived as audits and `HOLDOUT-OBLIGATIONS.md` in the harness found conventions it checked and
+this set was held to by nothing; each test's docstring says what it holds and why.
 
 The provenance rule is a **copy**, not an import — it is a private helper in the harness's test tree,
 and two copies of a rule are two things that can disagree. That weakness is stated in the module's
