@@ -119,11 +119,13 @@ jobs:
             .github/workflows/checks.yml \
             .gitignore \
             LICENSE \
+            NAMES \
             PERSONAS \
             README.md \
             ruff.toml \
             tests/test_holdout_conventions.py \
             tools/build_authoring_packet.py \
+            tools/declare_names.py \
             tools/declare_personas.py \
             | sort)
           transcripts=$(git ls-files 'transcripts/CALL-*.txt' | sort)
@@ -211,6 +213,16 @@ jobs:
         run: |
           set -eu
           python tools/declare_personas.py --check
+
+      - name: The name declaration is current
+        # `NAMES` is generated for the reason `PERSONAS` is. A name this set starts
+        # using that the harness register does not declare under its kind fails
+        # here until the file is regenerated and the addition committed, which is
+        # the deliberate act D101 asks of a new name.
+        if: hashFiles('.harness/pyproject.toml') != ''
+        run: |
+          set -eu
+          python tools/declare_names.py --check
 
       - name: Lint, format and type-check this repository's own Python
         # There was no gate of any kind until 2026-09-07, and no configuration

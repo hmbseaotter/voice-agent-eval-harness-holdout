@@ -21,9 +21,10 @@ and not here, this suite goes green against a stale convention -- which is the
 shape of failure the obligations file was written to catch in the first place.
 What was copied verbatim is held to its original by a test that compares the two:
 `_sourced_by`, the speech constants, the three constants that shape the
-provenance, event and escalation checks, and the persona pattern in
-`tools/declare_personas.py`. What was rewritten as a port, the register checks
-among them, is held by nothing and can fall behind the harness without failing.
+provenance, event and escalation checks, the persona pattern in
+`tools/declare_personas.py`, and the register extractor and its categories in
+`tools/declare_names.py`. What was rewritten as a port -- the bodies of the checks
+themselves -- is held by nothing, and can fall behind the harness without failing.
 The fix, if anyone wants it, is for the rules to move into the `harness` package
 so both repositories import one implementation.
 
@@ -950,95 +951,138 @@ _MINIMUM_WORDS_FOR_A_RATE: Final[int] = 4
 # entry was discharged.
 
 
-def _declared_in_register(section: str) -> set[str]:
-    """Backticked lower-case identifiers under a heading in the entity canon."""
-    assert HARNESS is not None
-    register = (HARNESS / "corpus" / "entities.md").read_text(encoding="utf-8")
-    start = register.index(section)
-    rest = register[start + len(section) :]
-    end = rest.find("\n## ")
-    return set(re.findall(r"`([a-z_]+)`", rest if end == -1 else rest[:end]))
-
-
 @requires_harness
 def test_every_name_used_here_is_declared_in_the_entity_register() -> None:
-    """The register claims to be the canonical list for both corpora.
+    """Used implies declared, for every kind of name, each against its own list.
 
+    D101's rule, ported. The harness's
     `tests/test_corpus_hygiene.py::test_every_name_the_corpus_uses_is_in_the_register`
-    asserts used-implies-declared over `corpus/transcripts/`, which is the
-    design set only. The register says so itself -- *"the held-out set is not in
-    this tree and this check does not reach it; keeping the two consistent is a
-    manual step at authoring time"* -- and this is that manual step becoming a
-    check.
+    holds nine kinds of name to nine categories of `corpus/entities.md`, with no
+    kind exempted, over `corpus/transcripts/` -- the design set only. The register
+    says so itself -- *"the held-out set is not in this tree and this check does
+    not reach it; keeping the two consistent is a manual step at authoring time"*
+    -- and this is that manual step becoming a check.
 
-    Read as one pooled comparison rather than section by section. The harness
-    splits context, state, tools and disclosures because it reports which list a
-    name is missing from; here the useful question is narrower and blunter:
-    **is this name anywhere in the canon at all?** A name that is in the wrong
-    section of the register is a harness-side tidiness problem, and a name in no
-    section is a corpus that invented vocabulary its own canon does not know.
+    **Each kind against its own category.** This replaced a check that pooled four
+    kinds and asked whether a name was backticked anywhere in the register, which
+    is D101's second defect by another route: a name declared under one kind
+    satisfied every other, and the kinds it never read, detail keys among them,
+    were compared against nothing. Detail keys are where this set's undeclared
+    names were found, on 2026-09-11.
+
+    **Declared means in its category or in `NAMES`.** Those names are vocabulary
+    this set introduced, and the register is a design-side document every design
+    session reads, so they are declared on this side, as the agent personas are
+    (O-8). `tools/declare_names.py` writes the file and CI re-runs it with --check.
+
+    **`outcome_reason` is the kind this matters most for.** `outcome` and
+    `disconnection_reason` are closed vocabularies the parser enforces, so an
+    unknown token aborts the parse. `outcome_reason` is a plain string in the
+    model and the register is the only place it is enumerated, so a typo there is
+    a value nothing else rejects. It had a test of its own until this one covered
+    its kind.
+
+    **The floor is per kind.** A kind that reads no names from this set compares
+    nothing, so the check names the kind that stopped being read rather than
+    reporting agreement over an empty set.
     """
-    from harness.core.events import DisclosureEvent, StateEvent, ToolCallEvent
-    from harness.corpus.text_adapter import parse_call
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    import declare_names
 
-    assert HARNESS is not None
-    register = (HARNESS / "corpus" / "entities.md").read_text(encoding="utf-8")
-    declared = set(re.findall(r"`([a-z_][a-z0-9_]*)`", register))
-    assert len(declared) > 40, (
-        f"only {len(declared)} names parsed out of the register; the extraction has broken "
-        "and this check would pass by comparing against almost nothing"
+    used = declare_names.names_used()
+    unread = [heading for heading, names in used.items() if not names]
+    assert not unread, (
+        f"no names of these kinds were read from this set: {unread}. Either the set stopped "
+        "using them or the extraction has drifted; either way nothing was compared"
     )
 
-    used: dict[str, set[str]] = {
-        "context": set(),
-        "state": set(),
-        "tool": set(),
-        "disclosure": set(),
-    }
-    for transcript in _transcripts():
-        call = parse_call(transcript)
-        used["context"].update(name for name, _ in call.context)
-        for event in call.events:
-            if isinstance(event, StateEvent):
-                used["state"].add(event.name)
-            elif isinstance(event, ToolCallEvent):
-                used["tool"].add(event.name)
-            elif isinstance(event, DisclosureEvent):
-                used["disclosure"].add(event.body.split(" ")[0])
-
-    undeclared = {kind: sorted(names - declared) for kind, names in used.items()}
-    problems = {kind: names for kind, names in undeclared.items() if names}
+    assert declare_names.DECLARATION.is_file(), (
+        "NAMES does not exist; run `python tools/declare_names.py` and commit it"
+    )
+    local = declare_names.read_declaration(declare_names.DECLARATION.read_text(encoding="utf-8"))
+    problems: list[str] = []
+    for heading, names in used.items():
+        declared = declare_names._declared_names(heading) | local.get(heading, set())
+        if missing := sorted(names - declared):
+            problems.append(f"{heading} {missing}")
     assert not problems, (
-        "names used in this set and absent from the harness's entity register:\n  "
-        + "\n  ".join(f"{kind}: {names}" for kind, names in sorted(problems.items()))
-        + "\nThe register is the canonical list for both corpora, so this is either a "
-        "transcript inventing vocabulary or a register that was not updated."
+        "names used in this set and declared neither in their category of the harness's "
+        "entity register nor in NAMES:\n  "
+        + "\n  ".join(problems)
+        + "\nDeclare them in the register, or re-run `python tools/declare_names.py` and commit."
     )
 
 
 @requires_harness
-def test_every_outcome_and_reason_used_here_is_declared() -> None:
-    """The call record's own vocabulary, which the check above does not reach.
+def test_the_register_check_is_reading_something() -> None:
+    """The harness's negative control for the extractor, ported with it.
 
-    `outcome` and `disconnection_reason` are validated at extraction, so an
-    unrecognized token aborts the parse and this adds nothing for them.
-    `outcome_reason` is **not** a closed vocabulary in the model -- it is a
-    plain string -- and the register is the only place it is enumerated. So it
-    is the one field here where a typo produces a value nothing rejects and
-    nothing compares against, which is the register's own argument for
-    declaring reason codes at all.
+    A heading typo or an extraction bug returns an empty declared set. The check
+    above would then report every name as undeclared -- and a regenerated `NAMES`
+    would absorb all of them and pass, which is the failure that matters here. So
+    each category must yield at least two names, including a named member that
+    proves the extraction reached the right block. The members are the harness's
+    own, and none comes from this set.
     """
-    from harness.corpus.text_adapter import parse_call
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    import declare_names
 
-    declared = _declared_in_register("**Outcome reasons.**")
-    assert declared, "the register's outcome-reason section no longer parses"
+    for heading, expected in (
+        ("**Context variables**", "booking_reference"),
+        ("**State variables**", "exchange_eligible"),
+        ("**Tools.**", "issue_refund"),
+        ("**Disclosure names.**", "recording_notice"),
+        ("**System event names.**", "call.answered"),
+        ("**Tool arguments.**", "assume_verified"),
+        ("**Tool-result detail keys.**", "difference_due"),
+        ("**Outcomes.**", "resolved"),
+        ("**Outcome reasons.**", "refund_issued"),
+    ):
+        declared = declare_names._declared_names(heading)
+        assert len(declared) >= 2, f"{heading} yielded {len(declared)} names"
+        assert expected in declared, f"{heading} does not name {expected}"
 
-    used = {parse_call(transcript).record.outcome_reason for transcript in _transcripts()}
-    assert used, "no outcome reasons were read"
-    undeclared = sorted(used - declared)
-    assert not undeclared, (
-        f"outcome reasons used here and absent from the register: {undeclared}. "
-        "outcome_reason is a plain string in the model, so nothing else rejects a typo"
+
+def test_the_register_extractor_stops_at_the_next_category(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D101's second defect, planted rather than assumed.
+
+    The extractor once stopped at the next `##` heading, so every category's set
+    held every category below it. Stopping at the next bold paragraph is wrong too,
+    because the register bolds prose as well as headings. And a pattern with no dot
+    does not fail on `call.answered`: it quietly returns a smaller set. The register
+    written here gives a different answer under each of those three from the right
+    one.
+
+    No harness is needed. The extractor reads whatever root it is pointed at, and
+    this points it at a register written here.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    import declare_names
+
+    register = tmp_path / "corpus" / "entities.md"
+    register.parent.mkdir(parents=True)
+    register.write_text(
+        "## Class 6\n\n"
+        "**Tools.** `alpha_tool`.\n\n"
+        "**Why this matters.** Bold prose is not a category, so `still_a_tool` stays.\n\n"
+        "**Context variables** `beta_variable`.\n\n"
+        "## Class 7\n\n"
+        "**Outcome reasons.** `gamma_reason`, `call.dotted`.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(declare_names, "_REGISTER_ROOT", tmp_path)
+
+    assert declare_names._declared_names("**Tools.**") == {"alpha_tool", "still_a_tool"}, (
+        "Tools did not end at the next category: a later category's name counted for it, "
+        "or bold prose inside it was taken for a boundary"
+    )
+    assert declare_names._declared_names("**Context variables**") == {"beta_variable"}, (
+        "Context variables did not end at the next category"
+    )
+    assert "call.dotted" in declare_names._declared_names("**Outcome reasons.**"), (
+        "a dotted name was dropped, so the pattern returns a smaller set and still reads green"
     )
 
 
@@ -1134,41 +1178,105 @@ def test_the_copied_provenance_helper_is_the_same_code_as_the_harness_one() -> N
     """
     assert HARNESS is not None
 
-    def _body(source: str) -> str:
-        module = ast.parse(source)
-        for node in ast.walk(module):
-            if isinstance(node, ast.FunctionDef) and node.name == "_sourced_by":
-                stripped = copy.deepcopy(node)
-                stripped.returns = None
-                stripped.decorator_list = []
-                for argument in stripped.args.args:
-                    argument.annotation = None
-                for inner in ast.walk(stripped):
-                    if isinstance(inner, ast.AnnAssign):
-                        inner.annotation = ast.Name(id="_", ctx=ast.Load())
-                body = [
-                    statement
-                    for statement in stripped.body
-                    if not isinstance(statement, (ast.Import, ast.ImportFrom))
-                ]
-                if (
-                    body
-                    and isinstance(body[0], ast.Expr)
-                    and isinstance(body[0].value, ast.Constant)
-                    and isinstance(body[0].value.value, str)
-                ):
-                    body = body[1:]
-                stripped.body = body
-                return ast.dump(stripped)
-        raise AssertionError("_sourced_by not found")
-
-    mine = _body((REPO_ROOT / "tests" / "test_holdout_conventions.py").read_text(encoding="utf-8"))
-    theirs = _body((HARNESS / "tests" / "test_corpus_hygiene.py").read_text(encoding="utf-8"))
+    mine = _normalized_function(
+        (REPO_ROOT / "tests" / "test_holdout_conventions.py").read_text(encoding="utf-8"),
+        "_sourced_by",
+    )
+    theirs = _normalized_function(
+        (HARNESS / "tests" / "test_corpus_hygiene.py").read_text(encoding="utf-8"), "_sourced_by"
+    )
     assert mine == theirs, (
         "the copy of _sourced_by here has diverged from the harness's. The two implement one "
         "convention and this suite would go green against a stale version of it. Re-copy it, "
         "or move the helper into the harness package so both import one implementation."
     )
+
+
+def _normalized_function(source: str, name: str, renames: dict[str, str] | None = None) -> str:
+    """The syntax tree of `name` in `source`, with what is not part of its rule taken out.
+
+    Annotations, decorators, the docstring and imports inside the body are
+    removed, for the reasons the `_sourced_by` comparison above gives. `renames`
+    maps a name the copy uses to the one the original uses, for a copy that reads
+    the same file from a different root.
+    """
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            stripped = copy.deepcopy(node)
+            stripped.returns = None
+            stripped.decorator_list = []
+            for argument in stripped.args.args:
+                argument.annotation = None
+            for inner in ast.walk(stripped):
+                if isinstance(inner, ast.AnnAssign):
+                    inner.annotation = ast.Name(id="_", ctx=ast.Load())
+                elif isinstance(inner, ast.Name) and renames and inner.id in renames:
+                    inner.id = renames[inner.id]
+            body = [
+                statement
+                for statement in stripped.body
+                if not isinstance(statement, (ast.Import, ast.ImportFrom))
+            ]
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                body = body[1:]
+            stripped.body = body
+            return ast.dump(stripped)
+    raise AssertionError(f"{name} not found")
+
+
+@requires_harness
+def test_the_register_extractor_is_the_same_code_as_the_harness_one() -> None:
+    """The register check's copies, held the way `_sourced_by` is.
+
+    `tools/declare_names.py` copies `_declared_names` and `_REGISTER_CATEGORIES`
+    from the harness's `tests/test_corpus_hygiene.py`. The function is compared as a
+    syntax tree under the `_sourced_by` normalizations and one more: the root the
+    register is read from, `_REGISTER_ROOT` in the copy and `REPO_ROOT` in the
+    harness. Which repository a path starts from is not part of what the function
+    computes; which file under it is read, and where it is cut, are.
+
+    `names_used` rewrites inline code rather than copying a helper, so it cannot be
+    compared whole. What can drift in it without the parser changing is how an
+    argument name and a detail key are read, so those two patterns are asserted to
+    be the ones the harness's check reads with.
+    """
+    assert HARNESS is not None
+    sys.path.insert(0, str(REPO_ROOT / "tools"))
+    import declare_names
+
+    theirs = (HARNESS / "tests" / "test_corpus_hygiene.py").read_text(encoding="utf-8")
+    mine = (REPO_ROOT / "tools" / "declare_names.py").read_text(encoding="utf-8")
+
+    copied = _normalized_function(mine, "_declared_names", {"_REGISTER_ROOT": "REPO_ROOT"})
+    assert copied == _normalized_function(theirs, "_declared_names"), (
+        "the copy of _declared_names in tools/declare_names.py has diverged from the "
+        "harness's, so this set's register check cuts the register differently"
+    )
+    assert _assigned_literal(theirs, "_REGISTER_CATEGORIES") == (
+        declare_names._REGISTER_CATEGORIES
+    ), "the register's categories changed in the harness and not in tools/declare_names.py"
+
+    check_name = "test_every_name_the_corpus_uses_is_in_the_register"
+    check = next(
+        (
+            node
+            for node in ast.parse(theirs).body
+            if isinstance(node, ast.FunctionDef) and node.name == check_name
+        ),
+        None,
+    )
+    assert check is not None, f"{check_name} is no longer in the harness"
+    segment = ast.get_source_segment(theirs, check) or ""
+    for pattern in (declare_names.ARGUMENT_NAME, declare_names.DETAIL_KEY):
+        assert f'r"{pattern.pattern}"' in segment, (
+            f"{check_name} no longer reads names with {pattern.pattern!r}; "
+            "re-read it before trusting names_used"
+        )
 
 
 def _assigned_literal(source: str, name: str) -> Any:
