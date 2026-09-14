@@ -121,6 +121,7 @@ jobs:
             LICENSE \
             NAMES \
             PERSONAS \
+            PHASE-5-LABELS.md \
             README.md \
             ruff.toml \
             tests/test_holdout_conventions.py \
