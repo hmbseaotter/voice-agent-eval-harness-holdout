@@ -125,6 +125,7 @@ jobs:
             README.md \
             ruff.toml \
             tests/test_holdout_conventions.py \
+            tests/test_label_findings.py \
             tests/test_label_worksheet.py \
             tests/test_review_folder.py \
             tests/test_validate_labels.py \
@@ -132,6 +133,7 @@ jobs:
             tools/build_review_folder.py \
             tools/declare_names.py \
             tools/declare_personas.py \
+            tools/make_label_findings.py \
             tools/make_label_worksheet.py \
             tools/validate_labels.py \
             | sort)
