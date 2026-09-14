@@ -126,7 +126,9 @@ jobs:
             ruff.toml \
             tests/test_holdout_conventions.py \
             tests/test_label_worksheet.py \
+            tests/test_review_folder.py \
             tools/build_authoring_packet.py \
+            tools/build_review_folder.py \
             tools/declare_names.py \
             tools/declare_personas.py \
             tools/make_label_worksheet.py \

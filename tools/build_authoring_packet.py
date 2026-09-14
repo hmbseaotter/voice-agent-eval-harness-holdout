@@ -267,12 +267,47 @@ view: write the call, not your view of it. The same applies to how the set is co
 """
 
 
-def build(harness: Path, out: Path, assignment: str, assignment_title: str) -> int:
-    design = {
+def design_ids(harness: Path) -> set[str]:
+    """The design set's call identifiers, read from the harness's own declaration."""
+    return {
         line.strip()
         for line in (harness / "corpus" / "DESIGN_SET").read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     }
+
+
+def redact(text: str) -> str:
+    """Apply every redaction: the exact strings first, then the patterns."""
+    for old, new in REDACTIONS:
+        if old in text:
+            text = text.replace(old, new)
+    for pattern, replacement in LINE_REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def find_leaks(out: Path, design: set[str]) -> list[str]:
+    """Every line of every file under `out` that names a design-set call.
+
+    The gate for anything built from the harness's documents. The redactions are
+    best-effort, and this is what turns a built folder into a mechanism rather
+    than a promise; `build_review_folder.py` runs the same scan.
+    """
+    leaks: list[str] = []
+    for path in sorted(out.rglob("*")):
+        if not path.is_file():
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for ref in _HELD_OUT_PATTERN.findall(line):
+                if ref in design:
+                    leaks.append(
+                        f"  {path.relative_to(out).as_posix()}:{number}: {line.strip()[:90]}"
+                    )
+    return leaks
+
+
+def build(harness: Path, out: Path, assignment: str, assignment_title: str) -> int:
+    design = design_ids(harness)
     if not design:
         print(
             "error: the harness declares no design set; refusing to build",
@@ -295,13 +330,7 @@ def build(harness: Path, out: Path, assignment: str, assignment_title: str) -> i
         (harness / "specs" / "event-model.md", out / "specs" / "event-model.md"),
         (harness / "corpus" / "entities.md", out / "reference" / "entity-canon.md"),
     ):
-        text = source.read_text(encoding="utf-8")
-        for old, new in REDACTIONS:
-            if old in text:
-                text = text.replace(old, new)
-        for pattern, replacement in LINE_REDACTIONS:
-            text = pattern.sub(replacement, text)
-        target.write_text(text, encoding="utf-8")
+        target.write_text(redact(source.read_text(encoding="utf-8")), encoding="utf-8")
 
     transcripts = sorted((REPO_ROOT / "transcripts").glob("CALL-*.txt"))
     for path in transcripts:
@@ -314,16 +343,7 @@ def build(harness: Path, out: Path, assignment: str, assignment_title: str) -> i
 
     # The gate. Everything above is best-effort; this is what makes the packet
     # a mechanism rather than a promise.
-    leaks: list[str] = []
-    for path in sorted(out.rglob("*")):
-        if not path.is_file():
-            continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            for ref in _HELD_OUT_PATTERN.findall(line):
-                if ref in design:
-                    leaks.append(
-                        f"  {path.relative_to(out).as_posix()}:{number}: {line.strip()[:90]}"
-                    )
+    leaks = find_leaks(out, design)
 
     print(f"packet written to {out}")
     print(f"  {len(transcripts)} held-out transcripts, 3 harness documents, 1 brief")

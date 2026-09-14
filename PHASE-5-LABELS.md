@@ -154,9 +154,11 @@ makes its content guessable.
    `~/holdout-review`. It holds the transcripts, the format specification, the event model and the
    entity canon (both redacted as for the authoring packet, with the same leak scan), a reviewer's copy
    of the worksheet, and `BRIEF.md`. It holds no rubric, no design findings and no seeding manifest.
-   - **Why the home directory.** The authoring packet sits beside both repositories, one directory below
-     the harness's parent folder. The review folder does not, and the builder refuses any destination
-     inside a git working tree.
+   - **Where it may be built.** Never inside this repository or the harness checkout, whatever their
+     ignore rules say. And never where a git repository would track what the reviewer writes: the
+     destination must be outside every repository, or ignored by the one that encloses it. On the
+     owner's machine the home directory is itself a repository that ignores `holdout-review`
+     (checked 2026-09-12), so the default passes by that second condition.
    - It also refuses before the freeze, and will not overwrite an existing folder.
    - A **fresh Fable 5.1 session** started in that folder fills in `notes-reviewer.md`. Its opening
      message is Appendix A.
