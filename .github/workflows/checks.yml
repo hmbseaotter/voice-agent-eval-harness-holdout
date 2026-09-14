@@ -127,11 +127,13 @@ jobs:
             tests/test_holdout_conventions.py \
             tests/test_label_worksheet.py \
             tests/test_review_folder.py \
+            tests/test_validate_labels.py \
             tools/build_authoring_packet.py \
             tools/build_review_folder.py \
             tools/declare_names.py \
             tools/declare_personas.py \
             tools/make_label_worksheet.py \
+            tools/validate_labels.py \
             | sort)
           transcripts=$(git ls-files 'transcripts/CALL-*.txt' | sort)
           test -n "$transcripts" || { echo "no transcripts are tracked"; exit 1; }
