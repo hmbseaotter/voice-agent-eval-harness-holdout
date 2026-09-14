@@ -142,6 +142,7 @@ jobs:
             tools/declare_names.py \
             tools/declare_personas.py \
             tools/label_gate.py \
+            tools/label_manifest.py \
             tools/make_label_findings.py \
             tools/make_label_worksheet.py \
             tools/validate_labels.py \

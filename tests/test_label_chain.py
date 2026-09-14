@@ -1,4 +1,4 @@
-"""The phase-5 chain, `tools/label_gate.py`.
+"""The phase-5 chain: `tools/label_gate.py`, and the `tools/label_manifest.py` that feeds it.
 
 Every repository here is invented: a stand-in harness whose invented rubric is
 frozen by a planted tag, and held-out histories written with `git fast-import`.
@@ -9,7 +9,9 @@ cost seconds a commit while guarding nothing a throwaway repository holds.
 A clean chain is walked through all four stages first. Every control after it
 is that chain with one step out of order, and each must turn the gate red with
 the problem named: the controls `PHASE-5-LABELS.md` §7 lists, and the checks the
-gate adds to them. Nothing here prints a label, because nothing here is one.
+gate adds to them. Then seal and reveal run over the same kind of invented
+repository, and what they write, committed as §6 says, must pass the gate.
+Nothing here prints a label, because nothing here is one.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import label_gate as chain  # noqa: E402
+import label_manifest as manifest_tool  # noqa: E402
 import make_label_worksheet as worksheet  # noqa: E402
 
 HARNESS: Final[Path | None] = worksheet.harness_root()
@@ -154,8 +157,8 @@ def _dated(days: int) -> dict[str, str]:
     return {"GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
 
 
-def _stand_in_harness(root: Path) -> tuple[Path, str]:
-    """A git repository standing in for the harness: one commit, dated `FROZEN_AT` and tagged."""
+def _stand_in_harness(root: Path, *, tagged: bool = True) -> tuple[Path, str]:
+    """A stand-in harness repository: one commit, dated `FROZEN_AT`, and tagged if asked."""
     (root / "corpus").mkdir(parents=True)
     (root / "HELDOUT_SET").write_text("CALL-90\nCALL-91\n", encoding="utf-8")
     (root / "corpus" / "findings.yaml").write_text("findings:\n  - id: F-01\n", encoding="utf-8")
@@ -163,7 +166,8 @@ def _stand_in_harness(root: Path) -> tuple[Path, str]:
     _git(root, "init", "-q")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "frozen", env=_dated(0))
-    _git(root, "tag", worksheet.FREEZE_TAG)
+    if tagged:
+        _git(root, "tag", worksheet.FREEZE_TAG)
     return root, _git(root, "rev-parse", "HEAD")
 
 
@@ -584,3 +588,187 @@ def test_the_digest_is_the_one_the_manifest_recipe_computes(tmp_path: Path) -> N
         check=True,
     )
     assert result.stdout.split()[0] == chain.digest(SALT, data)
+
+
+# --------------------------------------------------------------------------
+# Seal and reveal, run for real
+# --------------------------------------------------------------------------
+
+
+def _checked_out(repo: Path) -> Path:
+    """The working tree brought to HEAD without a hook, because seal and reveal read files."""
+    _git(repo, "read-tree", "-u", "--reset", "HEAD")
+    return repo
+
+
+def _held_out(root: Path) -> Path:
+    repo = _repository(root)
+    _extend(repo, _base())
+    return _checked_out(repo)
+
+
+def _private_labels(root: Path, freeze: str, *, traces: str | None = None) -> Path:
+    root.mkdir(parents=True)
+    (root / "findings.yaml").write_text(_FINDINGS, encoding="utf-8", newline="\n")
+    written = traces if traces is not None else _traces(freeze)
+    (root / "traces.yaml").write_text(written, encoding="utf-8", newline="\n")
+    return root
+
+
+def _commit_the_manifest(repo: Path, freeze: str, *, day: int = 1) -> str:
+    """What seal wrote, committed as §6 step 2 says: alone, with its trailer."""
+    message = f"Seal the held-out labels\n\n{chain.RUBRIC_FROZEN}: {freeze}\n"
+    (sealed,) = _extend(
+        repo, Commit(message, {chain.MANIFEST: (repo / chain.MANIFEST).read_bytes()}, day)
+    )
+    return sealed
+
+
+def test_seal_refuses_before_the_freeze(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """No tag, no manifest (D21)."""
+    untagged, _ = _stand_in_harness(tmp_path / "harness", tagged=False)
+    repo = _repository(tmp_path / "repo")
+    _extend(repo, _base())
+
+    assert manifest_tool.seal(repo=repo, harness=untagged, private=tmp_path / "private") == 1
+    assert not (repo / chain.MANIFEST).exists()
+    assert worksheet.FREEZE_TAG in capsys.readouterr().err
+
+
+@requires_harness
+def test_seal_refuses_labels_that_do_not_validate(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Invalid labels get no manifest, and no salt is made for them either."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+    broken = _traces(freeze).replace("  J-beta: []\n", "")
+    private = _private_labels(tmp_path / "private", freeze, traces=broken)
+
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
+    assert not (repo / chain.MANIFEST).exists()
+    assert not (private / "SALT").exists(), "a salt was made for labels that were never sealed"
+    assert "absent: J-beta" in capsys.readouterr().err
+
+
+@requires_harness
+def test_seal_writes_a_salt_and_a_manifest_that_recompute(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A salt of 64 hex characters and no newline, digests that recompute, an honest re-seal."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+    private = _private_labels(tmp_path / "private", freeze)
+
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    salt = (private / "SALT").read_bytes().decode("ascii")
+    assert chain.valid_salt(salt)
+    manifest, problems = chain.parse_manifest((repo / chain.MANIFEST).read_text(encoding="utf-8"))
+    assert problems == []
+    assert manifest is not None
+    assert manifest.freeze_sha == freeze
+    for path in chain.SEALED:
+        assert manifest.digests[path] == chain.digest(
+            salt, (private / Path(path).name).read_bytes()
+        )
+
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    assert "nothing changed" in capsys.readouterr().out
+
+    first = (repo / chain.MANIFEST).read_bytes()
+    extended = _traces(freeze) + "# re-sealed\n"
+    (private / "traces.yaml").write_text(extended, encoding="utf-8", newline="\n")
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    assert (repo / chain.MANIFEST).read_bytes() != first
+    assert (private / "SALT").read_bytes().decode("ascii") == salt, "re-sealing replaced the salt"
+    assert "re-sealed" in capsys.readouterr().out
+
+
+@requires_harness
+def test_seal_refuses_once_a_run_is_committed(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The manifest a run was measured against never changes, so there is no re-seal after one."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+    private = _private_labels(tmp_path / "private", freeze)
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    _extend(repo, _log(_commit_the_manifest(repo, freeze)))
+
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
+    assert "never changes" in capsys.readouterr().err
+
+
+@requires_harness
+def test_reveal_waits_for_a_committed_run_citing_the_current_manifest(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Nothing sealed, sealed with no run, and a run citing a superseded manifest: all refused."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+    private = _private_labels(tmp_path / "private", freeze)
+
+    def reveal() -> int:
+        return manifest_tool.reveal(repo=repo, harness=harness, private=private, frozen=_expected)
+
+    assert reveal() == 1, "nothing is sealed"
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    first = _commit_the_manifest(repo, freeze)
+    assert reveal() == 1, "sealed, but no run is committed"
+
+    extended = _traces(freeze) + "# re-sealed\n"
+    (private / "traces.yaml").write_text(extended, encoding="utf-8", newline="\n")
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    _commit_the_manifest(repo, freeze, day=2)
+    _extend(repo, _log(first, day=3))
+    assert reveal() == 1, "the only run cites a superseded manifest"
+
+    assert not any((repo / path).exists() for path in chain.PLAINTEXT)
+    assert "no committed run log cites" in capsys.readouterr().err
+
+
+@requires_harness
+def test_reveal_refuses_labels_changed_since_sealing(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only what was sealed is published: an edit after sealing stops the reveal (§9)."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+    private = _private_labels(tmp_path / "private", freeze)
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    _extend(repo, _log(_commit_the_manifest(repo, freeze)))
+
+    (private / "findings.yaml").write_text(
+        _FINDINGS + "# changed\n", encoding="utf-8", newline="\n"
+    )
+    revealed = manifest_tool.reveal(repo=repo, harness=harness, private=private, frozen=_expected)
+    assert revealed == 1
+    assert not any((repo / path).exists() for path in chain.PLAINTEXT)
+    assert "no longer recompute" in capsys.readouterr().err
+
+
+@requires_harness
+def test_seal_and_reveal_write_a_chain_the_gate_accepts(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """What the two commands write, committed as §6 says, holds at every stage, and only once."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+    private = _private_labels(tmp_path / "private", freeze)
+
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 0
+    sealed = _commit_the_manifest(repo, freeze)
+    assert _gate(repo, harness) == ("S1", [])
+    (judged,) = _extend(repo, _log(sealed))
+    assert _gate(repo, harness) == ("S2", [])
+
+    revealed = manifest_tool.reveal(repo=repo, harness=harness, private=private, frozen=_expected)
+    assert revealed == 0
+    assert f"{chain.JUDGED_RUN}: {judged}" in capsys.readouterr().out
+    files: dict[str, bytes | None] = {path: (repo / path).read_bytes() for path in chain.PLAINTEXT}
+    message = f"Reveal the held-out labels\n\n{chain.JUDGED_RUN}: {judged}\n"
+    _extend(repo, Commit(message, files, day=3))
+    assert _gate(repo, harness) == ("S3", [])
+
+    again = manifest_tool.reveal(repo=repo, harness=harness, private=private, frozen=_expected)
+    assert again == 1, "the labels were revealed a second time"

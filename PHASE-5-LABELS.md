@@ -91,7 +91,7 @@ as strong as the C1 push record.
 | `ledger.yaml` | owner | one ruling per draft: `id`, `verdict`, `owner`, `detectable_by`, `tier`, `origin`, `note`, and replacement text only under `accept-with-edits` |
 | `findings.yaml` | tool | generated from `drafts.yaml` and `ledger.yaml`, as the harness's `make_gold_set.py` does |
 | `traces.yaml` | owner | the entry mapping (format below) |
-| `SALT` | tool | 32 random bytes as 64 hex characters |
+| `SALT` | tool | 32 random bytes as 64 lowercase hex characters, with no newline, so the `cat` recipe below reproduces each digest |
 
 **Committed: `labels/` and `runs/`**, in the order of §3.
 
@@ -194,11 +194,11 @@ makes its content guessable.
 | Step | Who | Action | Refused when |
 |---|---|---|---|
 | 0 | — | The gate (§7) is merged **before** the tag exists. It is inert until then. | — |
-| 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F. Generates the salt if absent. Writes `labels/MANIFEST`. Prints counts only. | tag absent; either file invalid; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
+| 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F. Generates the salt if absent. Writes `labels/MANIFEST`, or rewrites it when re-sealing before any run. Prints counts only. | tag absent; a run log already committed; plaintext already in `labels/`; either file invalid; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
 | 2 | owner | Commit **only** `labels/MANIFEST` with trailer `Rubric-Frozen: <F>`. Push and wait for CI. | CI red |
 | 3 | harness session | Held-out judged run with header `labels_manifest: <C1>`; the log is written outside the harness tree. | header field missing; manifest commit not found |
 | 4 | owner | Commit the log to `runs/` with trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red |
-| 5 | tool: `label_manifest.py reveal` | Moves both files and the salt to `labels/` and recomputes. | no committed run log cites the current manifest; recomputation fails |
+| 5 | tool: `label_manifest.py reveal` | Copies both files and the salt to `labels/`, keeping the private copies, and recomputes from the copies. Names the commit the reveal's `Judged-Run` trailer must cite. | no committed run log cites the current manifest and passes the gate's run-log checks; the labels no longer validate; recomputation fails; plaintext already in `labels/` |
 | 6 | owner | Commit with trailer `Judged-Run: <C2>`. Push. The plaintext is published. | CI red |
 | 7 | harness | Agreement and coverage, from `labels/` and `runs/` in this repository. | — |
 
@@ -301,7 +301,8 @@ Built in the order the workflow needs them. Each refuses to act before the freez
 3. `tools/validate_labels.py`: the label validator, by stage: `drafts`, `findings`, and `all`, which
    adds `traces.yaml` against the rubric at F (§5 steps 6 to 8).
 4. `tools/make_label_findings.py`: the ledger-to-findings generator, with `--check` (§5 step 7).
-5. `label_manifest.py seal | reveal`.
+5. `tools/label_manifest.py seal | reveal` (§6 steps 1 and 5), tested with the gate in
+   `tests/test_label_chain.py`.
 6. `tools/label_gate.py`: the CI gate, with its synthetic controls in `tests/test_label_chain.py`,
    merged before the manifest commit.
 
