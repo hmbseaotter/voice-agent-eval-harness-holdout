@@ -36,9 +36,9 @@ transcript, and no statement about what the labels will say (D61). Every example
    harness**. It is committed here.
 3. **The run-log header has no manifest field yet.** `RunLogHeader` carries `rubric_version`,
    `prompt_template_hash`, `corpus_version`, `artifact_hash`, `mode` and `started_at`.
-4. **CI cannot see the freeze tag today.** Both checkouts use the default `fetch-depth: 1`;
-   `fetch-depth: 0` fetches all history and tags (confirmed against the `actions/checkout`
-   documentation).
+4. **CI could not see the freeze tag.** Both checkouts used the default `fetch-depth: 1` until the gate
+   set both to `fetch-depth: 0`, which fetches all history and tags (confirmed against the
+   `actions/checkout` documentation).
 5. **Agreement is scored through the rubric's `traces_to`, and the frozen rubric names design findings
    only.** An entry must fire on the calls its traced findings sit on and stay silent elsewhere (D105,
    D125). A held-out findings file therefore needs its own mapping to the rubric's entries, or it cannot
@@ -228,9 +228,21 @@ must turn the gate red:
   listed;
 - a moved tag.
 
+**What the gate reads, and what it adds.** `tools/label_gate.py` reads commits, never the working tree.
+- **A run log's header** is its first line, the harness's header record (`"record": "header"`). Its
+  `labels_manifest` holds the full SHA of the commit that last touched `labels/MANIFEST` (§8, item 1).
+- **The frozen template hash** is not a file digest: the harness hashes the halves it sends. So the
+  gate runs F's own code, from an archive of F, rather than a copy of it. A test checks the result
+  against the header of the reference run log the harness had committed at F.
+- **Added checks:** a run log never changes after the commit that adds it; no label file or salt
+  appears in any commit before the reveal, even one deleted since; the three plaintext files are added
+  once, in one commit; and `Judged-Run` is a full 40-character SHA.
+
 ## 8. Owed by the harness (rules only, for a harness session)
 
-1. `RunLogHeader` gains `labels_manifest`, required on any run over the held-out set (D26).
+1. `RunLogHeader` gains `labels_manifest`, required on any run over the held-out set (D26): a key of
+   the header record holding the manifest commit's full 40-character SHA, where `tools/label_gate.py`
+   reads it.
 2. A held-out run reads transcripts and writes its log outside the harness tree. `_resolve` already
    accepts absolute paths. `check_holdout_absence` should refuse any run log whose header names the
    held-out corpus.
@@ -290,7 +302,8 @@ Built in the order the workflow needs them. Each refuses to act before the freez
    adds `traces.yaml` against the rubric at F (§5 steps 6 to 8).
 4. `tools/make_label_findings.py`: the ledger-to-findings generator, with `--check` (§5 step 7).
 5. `label_manifest.py seal | reveal`.
-6. The CI gate with its synthetic controls, merged before the manifest commit.
+6. `tools/label_gate.py`: the CI gate, with its synthetic controls in `tests/test_label_chain.py`,
+   merged before the manifest commit.
 
 ---
 

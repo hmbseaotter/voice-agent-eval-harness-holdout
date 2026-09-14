@@ -47,7 +47,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the held-out set
+        # Full history, because the phase-5 gate below reads commit trailers,
+        # dates and ancestry, and a depth-1 clone holds one commit and none of it.
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Check out the harness alongside it
         # The default GITHUB_TOKEN is scoped to THIS repository and cannot read a
@@ -71,6 +75,9 @@ jobs:
           repository: hmbseaotter/voice-agent-eval-harness
           path: .harness
           token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
+          # History and tags, because the gate resolves rubric-frozen-v1 and
+          # archives the frozen commit, and a depth-1 checkout fetches neither.
+          fetch-depth: 0
 
       - name: Every transcript is named as one, and there is at least one
         # **This enumerated the members until 2026-09-07** -- a count of six and
@@ -125,6 +132,7 @@ jobs:
             README.md \
             ruff.toml \
             tests/test_holdout_conventions.py \
+            tests/test_label_chain.py \
             tests/test_label_findings.py \
             tests/test_label_worksheet.py \
             tests/test_review_folder.py \
@@ -133,21 +141,25 @@ jobs:
             tools/build_review_folder.py \
             tools/declare_names.py \
             tools/declare_personas.py \
+            tools/label_gate.py \
             tools/make_label_findings.py \
             tools/make_label_worksheet.py \
             tools/validate_labels.py \
             | sort)
           transcripts=$(git ls-files 'transcripts/CALL-*.txt' | sort)
           test -n "$transcripts" || { echo "no transcripts are tracked"; exit 1; }
-          actual=$(git ls-files | sort)
+          # labels/ and runs/ are left out here and checked by the phase-5 gate
+          # step below instead, which admits their files only in the order
+          # PHASE-5-LABELS.md §7 sets. A file anywhere else is still refused.
+          actual=$(git ls-files | grep -Ev '^(labels|runs)/' | sort)
           allowed=$(printf '%s\n%s\n' "$expected" "$transcripts" | sort)
           if ! diff -u <(echo "$allowed") <(echo "$actual"); then
             echo "::error::this repository tracks a file that is not on the allowlist above."
-            echo "::error::If it is a labels file it must not exist before rubric-frozen-v1 (D21)."
+            echo "::error::Labels and run logs belong under labels/ and runs/, which the gate checks."
             echo "::error::If it is something else, add it to the list in this workflow first."
             exit 1
           fi
-          echo "tracked files are exactly the allowlist"
+          echo "tracked files outside labels/ and runs/ are exactly the allowlist"
 
       - name: HELDOUT_SET in the harness matches the transcripts here
         # The standing duty in the harness's `HOLDOUT-OBLIGATIONS.md`: that file
@@ -232,6 +244,16 @@ jobs:
         run: |
           set -eu
           python tools/declare_names.py --check
+
+      - name: The phase-5 label chain holds in this repository's history
+        # PHASE-5-LABELS.md §7. The files under labels/ and runs/ are admitted
+        # only in order: a manifest citing the freeze, a run log citing the
+        # manifest, then the plaintext citing the run and recomputing to what
+        # was sealed. Until something is sealed, this asserts that nothing is.
+        if: hashFiles('.harness/pyproject.toml') != ''
+        run: |
+          set -eu
+          HARNESS_ROOT=.harness python tools/label_gate.py
 
       - name: Lint, format and type-check this repository's own Python
         # There was no gate of any kind until 2026-09-07, and no configuration

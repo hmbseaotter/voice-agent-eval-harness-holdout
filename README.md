@@ -65,7 +65,10 @@ it publish here, with the plaintext labels, at phase 5.
 `.github/workflows/checks.yml` asserts, in its own steps, that the transcripts here are exactly the
 ones the harness's `HELDOUT_SET` declares, that every transcript parses under the harness's current
 adapter with a zero unparsed-line count, and that **nothing is tracked outside an allowlist** — so no
-labels file can exist, whatever it is called or wherever it sits. The last is the one that matters.
+labels file can exist, whatever it is called or wherever it sits, except under `labels/` and `runs/`.
+Those two hold phase 5's sealed labels and judged run, and `tools/label_gate.py` checks them over git
+history in the order `PHASE-5-LABELS.md` §7 sets: nothing before the freeze, the manifest before the
+run, the run before the plaintext. The allowlist and the gate are the checks that matter.
 D21 withholds the labels until after `rubric-frozen-v1`, and until now "they do not exist yet" was a
 promise rather than a check — a promise about a repository nobody was running anything against, since
 this one had no tests, no CI and no linter of any kind while the harness's own verifier carried a
