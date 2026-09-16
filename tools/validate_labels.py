@@ -679,9 +679,14 @@ def severity_problems(path: Path, finding_ids: Sequence[str]) -> list[str]:
     Two rules, and deliberately not a third. It must load under `harness.core.severity`,
     which pins schema 3 and re-derives every band from the cuts, so what is sealed is the
     scoring tool's own export rather than a hand edit. And every id it names must be a
-    finding of this set. It need **not** name every finding: the design set's own export
-    scores 83 of its 90 and lists none unplaced, so a coverage rule here would refuse the
-    shape the tool actually writes.
+    finding of this set. It need **not** name every finding, and that is the scoring tool's
+    design rather than an omission (harness D187): `unplaced` is for findings that were in
+    scope and nobody compared, while a question-tier entry is excluded before scoring begins,
+    because rating a non-defect would put it in the anchor set and move every later
+    placement. One field cannot carry both without making an empty `unplaced` unreadable, so
+    the harness's coverage report names the findings that carry no band instead. A coverage
+    rule here would refuse the shape the tool writes: the design set's own export scores 83
+    of its 90 and lists none unplaced.
     """
     from harness.core.severity import SeverityError, load_severity
 

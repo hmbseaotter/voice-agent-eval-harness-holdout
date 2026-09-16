@@ -149,10 +149,14 @@ level carries `schema_version`, `anchor_set_version`, `comparison_log_hash`, `ru
 `appearances` and `informative`; and all three cuts travel in the same file.
 `tools/validate_labels.py severity` reads it with the harness's own loader, which pins the schema and
 re-derives every band from the cuts, and checks that every id it names is a finding of this set. It
-does **not** require the export to name every finding: the design set's own scores 83 of its 90 and
-lists none unplaced. `content_hash` is the hash of the finding text a band was placed on, and the
-harness checks it after the reveal, so a finding's text must not move after the export: re-export
-rather than edit either side of it.
+does **not** require the export to name every finding, which is the scoring tool's design and not an
+omission (harness D187): `unplaced` is for findings that were in scope and nobody compared, while a
+question-tier entry is excluded before scoring begins, since rating a non-defect would put it in the
+anchor set and move every later placement. One field cannot carry both without making an empty
+`unplaced` unreadable, so the harness's coverage report names the findings that carry no band instead.
+The design set's own export scores 83 of its 90 and lists none unplaced. `content_hash` is the hash
+of the finding text a band was placed on, and the harness checks it after the reveal, so a finding's
+text must not move after the export: re-export rather than edit either side of it.
 
 **`MANIFEST`** can be recomputed with standard tools and no project code:
 
@@ -233,7 +237,7 @@ makes its content guessable.
 | 4 | owner | Commit the log unmodified, under the name the harness gave it: `heldout-<started_at, colons as hyphens>-<mode>.jsonl`, written with that prefix on a held-out run and on no other (harness D184). **Nothing is renamed**, which is what the prefix bought: a rename between a paid-for log and its commit is silent until the gate reads the path. Trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red; a name the gate does not admit |
 | 5 | tool: `label_manifest.py reveal` | Copies the three sealed files and the salt to `labels/`, keeping the private copies, and recomputes from the copies. Names the commit the reveal's `Judged-Run` trailer must cite. | no committed run log cites the current manifest and passes the gate's run-log checks; the labels no longer validate; recomputation fails; plaintext already in `labels/` |
 | 6 | owner | Commit with trailer `Judged-Run: <C2>`. Push. The plaintext is published. | CI red |
-| 7 | harness | Agreement, from this repository and outside the harness checkout: `--held-out-transcripts`, `--held-out-corpus-version-file`, `--held-out-run-log`, `--held-out-findings`, `--held-out-traces`, with `--held-out-policies` optional and defaulting to the harness's own. Coverage reads `labels/severity.json` after the reveal. A rendered report over these calls is refused an `--out` path inside the harness checkout (harness D185), so it is written here or to stdout. | — |
+| 7 | harness | Agreement, from this repository and outside the harness checkout: `--held-out-transcripts`, `--held-out-corpus-version-file`, `--held-out-run-log`, `--held-out-findings`, `--held-out-traces`, with `--held-out-policies` optional and defaulting to the harness's own. Coverage reads `labels/severity.json` after the reveal, per band, and names the findings that carry no band (harness D187). A rendered report over these calls is refused an `--out` path inside the harness checkout (harness D185), so it is written here or to stdout. | — |
 
 **No tool ever displays label content.** Tools report counts and pass or fail.
 
@@ -284,7 +288,9 @@ that refuses a held-out run log (D174); agreement over both label files, reporti
 (D175); the phase-5 verifier declaring this gate's criteria (D176); the standing rule against searching
 these sessions; and a decision entry (D177) with register entries O-9, O-10 and O-11. Item 6 is
 decided, and what it decided is below. Items 8 to 11 landed with D181 to D186, the answers to this
-repository's four questions and the two decisions the harness took beside them.
+repository's four questions and the two decisions the harness took beside them. D187, at specification
+0.48.0, answers the question this repository asked back about the export's `unplaced`, and changes
+nothing here (§4).
 
 1. `RunLogHeader` gains `labels_manifest`, required on any run over the held-out set (D26): a key of
    the header record holding the manifest commit's full 40-character SHA, where `tools/label_gate.py`
