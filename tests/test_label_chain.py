@@ -63,6 +63,9 @@ _IDENTITY: Final[dict[str, str]] = {
 FROZEN_AT: Final[int] = 1_798_761_600
 DAY: Final[int] = 86_400
 SALT: Final[str] = "c" * 64
+#: The invented severity export. The chain seals its bytes, so its shape matters only
+#: in that `seal` refuses one that is missing, empty or not JSON.
+_SEVERITY: Final[bytes] = b'{"schema": 0, "invented": true, "bands": []}\n'
 EXPECTED: Final[chain.FrozenHeader] = chain.FrozenHeader(
     rubric_version="1", prompt_template_hash="a" * 64
 )
@@ -246,14 +249,16 @@ def _seal(
     findings: bytes,
     traces: bytes,
     *,
+    severity: bytes = _SEVERITY,
     day: int = 1,
     trailer: str | None = None,
     names: str | None = None,
 ) -> Commit:
-    """The manifest over `findings` and `traces`, with its `Rubric-Frozen` trailer."""
+    """The manifest over the three sealed files, with its `Rubric-Frozen` trailer."""
     digests = {
         chain.SEALED[0]: chain.digest(SALT, findings),
         chain.SEALED[1]: chain.digest(SALT, traces),
+        chain.SEALED[2]: chain.digest(SALT, severity),
     }
     manifest = chain.render_manifest(names or freeze, digests).encode()
     message = f"Seal the held-out labels\n\n{chain.RUBRIC_FROZEN}: {trailer or freeze}\n"
@@ -276,11 +281,19 @@ def _log(cites: str, *, day: int = 2, template_hash: str = EXPECTED.prompt_templ
     return Commit("Add the held-out judged run", {RUN_LOG: body.encode()}, day)
 
 
-def _reveal(judged: str | None, findings: bytes, traces: bytes, *, day: int = 3) -> Commit:
+def _reveal(
+    judged: str | None,
+    findings: bytes,
+    traces: bytes,
+    *,
+    severity: bytes = _SEVERITY,
+    day: int = 3,
+) -> Commit:
     trailer = f"\n\n{chain.JUDGED_RUN}: {judged}" if judged else ""
     files: dict[str, bytes | None] = {
         chain.SEALED[0]: findings,
         chain.SEALED[1]: traces,
+        chain.SEALED[2]: severity,
         chain.SALT: SALT.encode(),
     }
     return Commit(f"Reveal the held-out labels{trailer}\n", files, day)
@@ -473,6 +486,13 @@ def _a_reveal_without_its_trailer(repo: Path, freeze: str) -> None:
     _extend(repo, _reveal(None, findings, traces))
 
 
+def _severity_that_does_not_recompute(repo: Path, freeze: str) -> None:
+    findings, traces = _labels(freeze)
+    sealed = _extend(repo, _base(), _seal(freeze, findings, traces))[1]
+    (judged,) = _extend(repo, _log(sealed))
+    _extend(repo, _reveal(judged, findings, traces, severity=_SEVERITY + b"{}\n"))
+
+
 _AT_THE_REVEAL: Final[dict[str, tuple[Callable[[Path, str], None], str]]] = {
     "plaintext before a run log": (
         _plaintext_before_a_run,
@@ -481,6 +501,10 @@ _AT_THE_REVEAL: Final[dict[str, tuple[Callable[[Path, str], None], str]]] = {
     "plaintext that does not recompute": (
         _plaintext_that_does_not_recompute,
         "labels/findings.yaml: does not recompute",
+    ),
+    "severity that does not recompute": (
+        _severity_that_does_not_recompute,
+        "labels/severity.json: does not recompute",
     ),
     "labels edited after the reveal": (_labels_edited_after_the_reveal, "after the reveal"),
     "a call neither referenced nor listed": (
@@ -609,11 +633,15 @@ def _held_out(root: Path) -> Path:
     return _checked_out(repo)
 
 
-def _private_labels(root: Path, freeze: str, *, traces: str | None = None) -> Path:
+def _private_labels(
+    root: Path, freeze: str, *, traces: str | None = None, severity: bytes | None = _SEVERITY
+) -> Path:
     root.mkdir(parents=True)
     (root / "findings.yaml").write_text(_FINDINGS, encoding="utf-8", newline="\n")
     written = traces if traces is not None else _traces(freeze)
     (root / "traces.yaml").write_text(written, encoding="utf-8", newline="\n")
+    if severity is not None:
+        (root / "severity.json").write_bytes(severity)
     return root
 
 
@@ -651,6 +679,25 @@ def test_seal_refuses_labels_that_do_not_validate(
     assert not (repo / chain.MANIFEST).exists()
     assert not (private / "SALT").exists(), "a salt was made for labels that were never sealed"
     assert "absent: J-beta" in capsys.readouterr().err
+
+
+@requires_harness
+def test_seal_refuses_without_the_severity_export(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The bands are sealed with the labels (O-10), or nothing is sealed at all."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+    private = _private_labels(tmp_path / "private", freeze, severity=None)
+
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
+    assert not (repo / chain.MANIFEST).exists()
+    assert "does not exist" in capsys.readouterr().err
+
+    (private / "severity.json").write_bytes(b"bands, but not JSON\n")
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
+    assert not (repo / chain.MANIFEST).exists()
+    assert "is not JSON" in capsys.readouterr().err
 
 
 @requires_harness

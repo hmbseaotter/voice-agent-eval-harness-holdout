@@ -64,6 +64,7 @@ F  rubric-frozen-v1 ──cited by──▶ C1  labels/MANIFEST          trailer
                                    ▼
                                   C3  labels/findings.yaml      trailer  Judged-Run: <C2>
                                       labels/traces.yaml
+                                      labels/severity.json
                                       labels/SALT
 ```
 
@@ -94,15 +95,16 @@ as strong as the C1 push record.
 | `ledger.yaml` | owner | one ruling per draft: `id`, `verdict`, `owner`, `detectable_by`, `tier`, `origin`, `note`, and replacement text only under `accept-with-edits` |
 | `findings.yaml` | tool | generated from `drafts.yaml` and `ledger.yaml`, as the harness's `make_gold_set.py` does |
 | `traces.yaml` | owner | the entry mapping (format below) |
+| `severity.json` | owner | the held-out bands, exported from a `comparative-judgment` store of their own kept outside both repositories (harness O-10); placed before the judged run, sealed with the labels, revealed with them |
 | `SALT` | tool | 32 random bytes as 64 lowercase hex characters, with no newline, so the `cat` recipe below reproduces each digest |
 
 **Committed: `labels/` and `runs/`**, in the order of §3.
 
 | Path | Commit | Contents |
 |---|---|---|
-| `labels/MANIFEST` | C1 | algorithm, freeze SHA, two digest lines |
+| `labels/MANIFEST` | C1 | algorithm, freeze SHA, one digest line per sealed file |
 | `runs/heldout-<started_at>.jsonl` | C2 | the held-out judged run log, unmodified |
-| `labels/findings.yaml`, `labels/traces.yaml`, `labels/SALT` | C3 | byte-identical to what C1 sealed |
+| `labels/findings.yaml`, `labels/traces.yaml`, `labels/severity.json`, `labels/SALT` | C3 | byte-identical to what C1 sealed |
 
 **`findings.yaml`** uses the gold-set format exactly, so `harness.core.findings` loads it: eight
 required keys and no unknown ones. **Held-out ids are shaped `HF-NN`**, two digits or more. The loader
@@ -130,6 +132,11 @@ forgotten, but a call with nothing wrong could then be sealed only by inventing 
 keeps the omission impossible and makes "nothing wrong here" a recorded decision, sealed with the
 mapping so it cannot change after the run.
 
+**`severity.json`** is sealed as bytes, and nothing here reads inside it. The bands are labels
+(D10), their store is a separate `comparative-judgment` one kept outside both repositories (harness
+O-10), and the schema is the harness's to state. `seal` refuses an export that is missing, empty or
+not JSON; the validation that reads inside it is owed in §11.
+
 **`MANIFEST`** can be recomputed with standard tools and no project code:
 
 ```
@@ -138,10 +145,11 @@ mapping so it cannot change after the run.
 # rubric-frozen-v1: <40-hex freeze commit SHA>
 <64-hex digest>  labels/findings.yaml
 <64-hex digest>  labels/traces.yaml
+<64-hex digest>  labels/severity.json
 ```
 
 A reader verifies each file with `(cat labels/SALT; printf '\n'; cat labels/findings.yaml) | sha256sum`.
-One salt serves both lines. It is cheap, and it keeps the commitment hiding even if a file's shape ever
+One salt serves every line. It is cheap, and it keeps the commitment hiding even if a file's shape ever
 makes its content guessable.
 
 ## 5. The labeling workflow (adopted 2026-09-12)
@@ -190,18 +198,22 @@ makes its content guessable.
 8. **Entry mapping.** The owner writes `traces.yaml` with the rubric open. An AI may explain entries
    when asked; the mapping calls are the owner's. `tools/validate_labels.py` then checks the findings
    and the mapping together, which is what sealing requires.
-9. **Seal, then run, then reveal** (§6).
+9. **Severity.** The owner places the held-out findings in a `comparative-judgment` store of their
+   own, kept outside both repositories, and exports the result to `private/labels/severity.json`. It
+   happens before the judged run, because afterwards whoever orders the findings can see which ones the
+   judge missed, and the export is sealed with the labels and revealed with them (harness O-10, D177).
+10. **Seal, then run, then reveal** (§6).
 
 ## 6. Seal, run, reveal
 
 | Step | Who | Action | Refused when |
 |---|---|---|---|
 | 0 | — | The gate (§7) is merged **before** the tag exists. It is inert until then. | — |
-| 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F. Generates the salt if absent. Writes `labels/MANIFEST`, or rewrites it when re-sealing before any run. Prints counts only. | tag absent; a run log already committed; plaintext already in `labels/`; either file invalid; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
+| 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F, and seals `severity.json` as bytes. Generates the salt if absent. Writes `labels/MANIFEST`, or rewrites it when re-sealing before any run. Prints counts only. | tag absent; a run log already committed; plaintext already in `labels/`; either label file invalid; the severity export missing, empty or not JSON; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
 | 2 | owner | Commit **only** `labels/MANIFEST` with trailer `Rubric-Frozen: <F>`. Push and wait for CI. | CI red |
 | 3 | harness session | Held-out judged run, from the harness: `harness run --tier judge --mode live`, with `--transcripts` at this repository's transcripts directory and `--run-log-dir` outside the harness checkout, both absolute, and `--labels-manifest <C1>`. The header then carries `labels_manifest: <C1>`. | `--labels-manifest` absent, or not 40 lowercase hex characters; a run mixing declared and undeclared calls; a design-set run given the flag; any of those paths inside the harness checkout |
 | 4 | owner | Commit the log unmodified as `runs/heldout-<the harness's file name>`. The harness writes `<started_at, colons as hyphens>-<mode>.jsonl`, and the gate admits that name only under the `heldout-` prefix. Trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red; a name the gate does not admit |
-| 5 | tool: `label_manifest.py reveal` | Copies both files and the salt to `labels/`, keeping the private copies, and recomputes from the copies. Names the commit the reveal's `Judged-Run` trailer must cite. | no committed run log cites the current manifest and passes the gate's run-log checks; the labels no longer validate; recomputation fails; plaintext already in `labels/` |
+| 5 | tool: `label_manifest.py reveal` | Copies the three sealed files and the salt to `labels/`, keeping the private copies, and recomputes from the copies. Names the commit the reveal's `Judged-Run` trailer must cite. | no committed run log cites the current manifest and passes the gate's run-log checks; the labels no longer validate; recomputation fails; plaintext already in `labels/` |
 | 6 | owner | Commit with trailer `Judged-Run: <C2>`. Push. The plaintext is published. | CI red |
 | 7 | harness | Agreement and coverage, from `labels/` and `runs/` in this repository. | — |
 
@@ -217,9 +229,9 @@ makes its content guessable.
 | Stage | Admitted | Asserted over `git log` |
 |---|---|---|
 | S0, before the freeze | nothing new | `labels/` and `runs/` do not exist. Today's behavior. |
-| S1 | `labels/MANIFEST` | tag resolves; every commit touching `MANIFEST` carries `Rubric-Frozen` equal to the tag's commit and is dated after it; the header states the same SHA; exactly two digest lines, for `findings.yaml` and `traces.yaml`; no plaintext exists yet |
+| S1 | `labels/MANIFEST` | tag resolves; every commit touching `MANIFEST` carries `Rubric-Frozen` equal to the tag's commit and is dated after it; the header states the same SHA; one digest line per sealed file, naming `findings.yaml`, `traces.yaml` and `severity.json`; no plaintext exists yet |
 | S2 | `runs/heldout-*.jsonl` | each header's `labels_manifest` equals the latest commit touching `MANIFEST` before that log's first commit, and is its ancestor; `rubric_version` and `prompt_template_hash` equal the harness's at F; `MANIFEST` untouched after the first log's commit |
-| S3 | `labels/findings.yaml`, `labels/traces.yaml`, `labels/SALT` | reveal commit carries `Judged-Run` naming a commit that added a valid log, and that commit is an ancestor; both files recompute to `MANIFEST`; `findings.yaml` loads; `traces.yaml` keys equal the rubric's entries at F, every finding is placed, and every held-out call is referenced or listed; none of the three touched afterwards |
+| S3 | `labels/findings.yaml`, `labels/traces.yaml`, `labels/severity.json`, `labels/SALT` | reveal commit carries `Judged-Run` naming a commit that added a valid log, and that commit is an ancestor; all three sealed files recompute to `MANIFEST`; `findings.yaml` loads; `traces.yaml` keys equal the rubric's entries at F, every finding is placed, and every held-out call is referenced or listed; none of the four touched afterwards |
 
 **Controls, all synthetic.** A scratch repository and a scratch "harness" with a planted tag. Each case
 must turn the gate red:
@@ -238,8 +250,8 @@ must turn the gate red:
   gate runs F's own code, from an archive of F, rather than a copy of it. A test checks the result
   against the header of the reference run log the harness had committed at F.
 - **Added checks:** a run log never changes after the commit that adds it; no label file or salt
-  appears in any commit before the reveal, even one deleted since; the three plaintext files are added
-  once, in one commit; and `Judged-Run` is a full 40-character SHA.
+  appears in any commit before the reveal, even one deleted since; the sealed files and the salt are
+  added once, in one commit; and `Judged-Run` is a full 40-character SHA.
 
 ## 8. Owed by the harness (rules only, for a harness session)
 
@@ -307,13 +319,11 @@ findings on 2026-09-12, 78 are traced by at least one rubric entry and 12 by non
 Found by the cross-project audit of 2026-09-15, which read both repositories at held-out `5760aa9` and
 harness `6a0f144`.
 
-- **A slot for the sealed severity file.** O-10 places the bands before the judged run and asks for
-  them sealed in a form the gate can check. The chain seals exactly `findings.yaml` and `traces.yaml`,
-  and the gate admits only those, the salt and the manifest. Settle it before C1, because the manifest
-  never changes once a run cites it: either a third sealed file, with its digest line in the manifest
-  and its path admitted at S3 (`SEALED`, `render_manifest`, `parse_manifest`, seal, reveal and the S3
-  recomputation moving together), or a second sealed artifact the gate admits by name. The harness
-  states the file's name, schema and location; record the answer in §4 and §6.
+- **Reading inside the sealed severity file.** The slot exists: `labels/severity.json` is sealed
+  with the labels at C1 and revealed with them at C3, and `seal` refuses an export that is missing,
+  empty or not JSON. Nothing reads further in. When the harness states the schema its coverage report
+  expects, add the validation that belongs here — every id a finding of this set, and the bands the
+  held-out store's own — and record the schema in §4.
 - **The held-out corpus version.** The harness stamps `corpus_version` into every run-log header from a
   file, and its agreement command requires `--held-out-corpus-version-file`. This repository has no
   such file, so a run made as §6 reads would stamp the design corpus's version into a header committed

@@ -20,16 +20,17 @@ include the ones before it.
 - S0: nothing under `labels/` or `runs/`, and no label file or salt in any commit.
 - S1: `labels/MANIFEST`. Every commit that touched it carries
   `Rubric-Frozen: <F>`, where F is the commit `rubric-frozen-v1` names now, and
-  is dated after F. The manifest names F and holds exactly the two digest lines.
+  is dated after F. The manifest names F and holds one digest line per sealed file.
 - S2: `runs/heldout-*.jsonl`. Each log's header record names, as
   `labels_manifest`, the last commit to touch `labels/MANIFEST` before the log
   was committed. It states the rubric version and prompt-template hash the
   harness computes at F, and it never changes after it is committed.
   `labels/MANIFEST` never changes after a log is committed.
-- S3: `labels/findings.yaml`, `labels/traces.yaml` and `labels/SALT`, added once
-  and together by a commit that carries `Judged-Run: <C2>`, where C2 added a log
-  that passes S2 and is an ancestor of the reveal. Both files recompute to the
-  manifest and pass `tools/validate_labels.py`, and none of the three changes
+- S3: `labels/findings.yaml`, `labels/traces.yaml`, `labels/severity.json` and
+  `labels/SALT`, added once and together by a commit that carries
+  `Judged-Run: <C2>`, where C2 added a log that passes S2 and is an ancestor of
+  the reveal. All three sealed files recompute to the manifest, the two label
+  files pass `tools/validate_labels.py`, and none of the four changes
   afterwards.
 
 Anything else under `labels/` or `runs/` fails, whatever it is called.
@@ -79,7 +80,11 @@ if TYPE_CHECKING:  # pragma: no cover - types only
     from collections.abc import Callable
 
 MANIFEST: Final[str] = "labels/MANIFEST"
-SEALED: Final[tuple[str, ...]] = ("labels/findings.yaml", "labels/traces.yaml")
+#: The held-out bands, exported from a `comparative-judgment` store of their own kept
+#: outside both repositories (harness O-10). The chain seals its bytes and reads nothing
+#: inside it: the bands are labels (D10), and their schema is the harness's to state.
+SEVERITY: Final[str] = "labels/severity.json"
+SEALED: Final[tuple[str, ...]] = ("labels/findings.yaml", "labels/traces.yaml", SEVERITY)
 SALT: Final[str] = "labels/SALT"
 PLAINTEXT: Final[tuple[str, ...]] = (*SEALED, SALT)
 RUN_LOG: Final[re.Pattern[str]] = re.compile(r"runs/heldout-[A-Za-z0-9._-]+\.jsonl")

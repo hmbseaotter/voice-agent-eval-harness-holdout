@@ -18,8 +18,9 @@ CI after a push, and by then the push has published it.
 SEAL
 ----
 Refuses before the freeze, once a run log is committed (the manifest a run was
-measured against never changes), when plaintext is already in `labels/`, and
-when the labels do not pass `tools/validate_labels.py`. Generates
+measured against never changes), when plaintext is already in `labels/`, when
+the labels do not pass `tools/validate_labels.py`, and when the severity export
+is missing, empty or not JSON. Generates
 `private/labels/SALT` when it is absent: 32 random bytes as 64 lowercase hex
 characters and no newline, so §4's `cat` recipe reproduces each digest.
 Re-sealing before any run rewrites the manifest, and says so.
@@ -32,10 +33,10 @@ Refuses unless:
   run-log checks;
 - the private labels still validate and recompute to it.
 
-Then it copies the two files and the salt into `labels/`, recomputes from the
-copies, and names the commit the reveal's `Judged-Run` trailer must cite. The
-private copies stay: publishing does not need them gone, and a move interrupted
-halfway could lose the only copy.
+Then it copies the three sealed files and the salt into `labels/`, recomputes
+from the copies, and names the commit the reveal's `Judged-Run` trailer must
+cite. The private copies stay: publishing does not need them gone, and a move
+interrupted halfway could lose the only copy.
 
 WHAT IT PRINTS
 --------------
@@ -45,6 +46,7 @@ Counts and commit ids, never a label.
 from __future__ import annotations
 
 import argparse
+import json
 import secrets
 import sys
 from pathlib import Path
@@ -59,6 +61,7 @@ from label_gate import (
     RUBRIC_FROZEN,
     RUN_LOG,
     SEALED,
+    SEVERITY,
     GateError,
     committed_at,
     digest,
@@ -92,6 +95,26 @@ def _private(private: Path, path: str) -> Path:
     return private / Path(path).name
 
 
+def _unsealable(private: Path) -> list[str]:
+    """Why the severity export cannot be sealed, if it cannot.
+
+    Read no further than JSON. The bands are labels (D10) and the schema is the harness's
+    to state, so what is checked here is that a file exists to seal and that it is not a
+    truncated export; the validation that reads inside it is owed in §11.
+    """
+    path = _private(private, SEVERITY)
+    if not path.is_file():
+        return [f"{path} does not exist; place the bands and export them before sealing (O-10)"]
+    data = path.read_bytes()
+    if not data.strip():
+        return [f"{path} is empty"]
+    try:
+        json.loads(data)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return [f"{path} is not JSON"]
+    return []
+
+
 def seal(*, repo: Path = REPO_ROOT, harness: Path, private: Path = LABELS) -> int:
     """Write `labels/MANIFEST` over the private labels, or refuse and say why."""
     freeze = freeze_commit(harness)
@@ -120,6 +143,9 @@ def seal(*, repo: Path = REPO_ROOT, harness: Path, private: Path = LABELS) -> in
     )
     if problems:
         return _refuse(f"the labels in {private} do not validate, so nothing was sealed", problems)
+    unsealable = _unsealable(private)
+    if unsealable:
+        return _refuse("the severity export is not ready, so nothing was sealed", unsealable)
 
     salt_path = _private(private, "SALT")
     made = not salt_path.exists()
@@ -213,6 +239,9 @@ def reveal(
     salt = salt_path.read_bytes().decode("ascii", "replace") if salt_path.is_file() else ""
     if not valid_salt(salt):
         return _refuse(f"{salt_path} is missing, or not 64 lowercase hex characters")
+    absent = [Path(path).name for path in SEALED if not _private(private, path).is_file()]
+    if absent:
+        return _refuse(f"{', '.join(absent)}: missing from {private}, so nothing was revealed")
     changed = [
         Path(path).name
         for path in SEALED
