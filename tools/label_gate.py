@@ -23,9 +23,9 @@ include the ones before it.
   is dated after F. The manifest names F and holds one digest line per sealed file.
 - S2: `runs/heldout-*.jsonl`. Each log's header record names, as
   `labels_manifest`, the last commit to touch `labels/MANIFEST` before the log
-  was committed. It states the rubric version and prompt-template hash the
-  harness computes at F, and it never changes after it is committed.
-  `labels/MANIFEST` never changes after a log is committed.
+  was committed. It states the rubric version, the prompt-template hash and the
+  rubric hash the harness computes at F, and it never changes after it is
+  committed. `labels/MANIFEST` never changes after a log is committed.
 - S3: `labels/findings.yaml`, `labels/traces.yaml`, `labels/severity.json` and
   `labels/SALT`, added once and together by a commit that carries
   `Judged-Run: <C2>`, where C2 added a log that passes S2 and is an ancestor of
@@ -48,6 +48,15 @@ it sends, with comments stripped. So the gate does not reimplement it. It runs
 the frozen commit's own code, from an archive of that commit, in a separate
 interpreter, and a test checks that this reproduces the hash in the reference
 run log the harness had committed at F.
+
+THE RUBRIC HASH AT F
+--------------------
+`rubric_version` is moved by hand and `prompt_template_hash` covers the two
+halves of the prompt that are sent, so an entry's question, criteria or scale
+text can move without either of them moving (harness D183). A held-out run's
+header therefore carries `rubric_hash`, over `rubric.yaml` read as text and
+encoded UTF-8. The gate hashes the blob at F the same way, and a test checks
+that computation against the harness's own function.
 
 WHAT IT PRINTS
 --------------
@@ -92,6 +101,7 @@ RUN_LOG: Final[re.Pattern[str]] = re.compile(r"runs/heldout-[A-Za-z0-9._-]+\.jso
 RUBRIC_FROZEN: Final[str] = "Rubric-Frozen"
 JUDGED_RUN: Final[str] = "Judged-Run"
 LABELS_MANIFEST: Final[str] = "labels_manifest"
+RUBRIC_HASH: Final[str] = "rubric_hash"
 
 STAGES: Final[dict[str, str]] = {
     "S0": "nothing sealed",
@@ -138,6 +148,8 @@ class FrozenHeader:
 
     rubric_version: str
     prompt_template_hash: str
+    rubric_hash: str
+    """`rubric.yaml` at F, hashed as the harness hashes the file it judged under (D183)."""
 
 
 # --------------------------------------------------------------------------
@@ -293,11 +305,23 @@ def _assigned(source: str, name: str) -> object:
     raise GateError(f"the frozen harness assigns no {name}")
 
 
+def rubric_digest(blob: bytes) -> str:
+    """sha256 over `rubric.yaml` read as text and encoded UTF-8, as the harness reads it.
+
+    Not a digest of the blob's bytes. The harness hashes `path.read_text(...)`, whose
+    universal newlines make a CRLF checkout hash as the freeze commit's blob does
+    (harness D186), so normalizing here is what lets the two computations agree.
+    """
+    text = blob.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def frozen_header(harness: Path, freeze_sha: str) -> FrozenHeader:
     """The rubric version and prompt-template hash the harness computes at `freeze_sha`."""
     import yaml
 
-    rubric = yaml.safe_load(show(harness, freeze_sha, "rubric.yaml"))
+    blob = show(harness, freeze_sha, "rubric.yaml")
+    rubric = yaml.safe_load(blob)
     version = rubric.get("version") if isinstance(rubric, dict) else None
     if not isinstance(version, str):
         raise GateError(f"rubric.yaml at {freeze_sha[:12]} declares no version")
@@ -337,7 +361,7 @@ def frozen_header(harness: Path, freeze_sha: str) -> FrozenHeader:
             raise GateError("the template hash came from a harness other than the frozen one")
     if _HEX64.fullmatch(template_hash) is None:
         raise GateError(f"the harness at {freeze_sha[:12]} produced no template hash")
-    return FrozenHeader(version, template_hash)
+    return FrozenHeader(version, template_hash, rubric_digest(blob))
 
 
 # --------------------------------------------------------------------------
@@ -376,6 +400,17 @@ def log_problems(repo: Path, path: str, expected: FrozenHeader) -> tuple[str, li
     if header.get("prompt_template_hash") != expected.prompt_template_hash:
         problems.append(
             f"{path}: its prompt_template_hash is not the template's at the freeze commit"
+        )
+    judged_under = header.get(RUBRIC_HASH)
+    if not judged_under:
+        problems.append(
+            f"{path}: its header names no {RUBRIC_HASH}; a held-out run states the rubric it "
+            "judged under, and neither field above moves when an entry's text does (D183)"
+        )
+    elif judged_under != expected.rubric_hash:
+        problems.append(
+            f"{path}: its {RUBRIC_HASH} is not rubric.yaml's at the freeze commit; the labels "
+            "were written against the rubric as it stood there"
         )
     return commit, problems
 

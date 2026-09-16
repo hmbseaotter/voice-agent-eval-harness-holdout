@@ -34,11 +34,14 @@ transcript, and no statement about what the labels will say (D61). Every example
 2. **A held-out run log contains held-out transcript text.** The run log stores "the exact prompt
    sent" (D128), and a judged prompt embeds the transcript. That log can **never be committed to the
    harness**. It is committed here.
-3. **The run-log header names the manifest.** `RunLogHeader` carries `rubric_version`,
-   `prompt_template_hash`, `corpus_version`, `artifact_hash`, `mode`, `started_at`, and, when they are
-   set, `resumed_from` and `labels_manifest` (delivered 2026-09-15, harness D173). The harness requires
-   `labels_manifest` on a run over the calls `HELDOUT_SET` declares, refuses it on any other run, and
-   checks only its shape. That the commit it names is the manifest in force is checked here, at S2.
+3. **The run-log header names the manifest and the rubric.** `RunLogHeader` carries
+   `rubric_version`, `prompt_template_hash`, `corpus_version`, `artifact_hash`, `mode`, `started_at`,
+   and, when they are set, `resumed_from`, `labels_manifest` (delivered 2026-09-15, harness D173) and
+   `rubric_hash` (delivered 2026-09-16, harness D183). The harness requires `labels_manifest` on a run
+   over the calls `HELDOUT_SET` declares, refuses it on any other run, and checks only its shape; it
+   writes `rubric_hash` on those same runs and on no other, and refuses a replay or a resume whose log
+   names another rubric or none, with no override. That the commit `labels_manifest` names is the
+   manifest in force, and that `rubric_hash` is `rubric.yaml`'s at F, are checked here, at S2.
 4. **CI could not see the freeze tag.** Both checkouts used the default `fetch-depth: 1` until the gate
    set both to `fetch-depth: 0`, which fetches all history and tags (confirmed against the
    `actions/checkout` documentation).
@@ -59,6 +62,7 @@ F  rubric-frozen-v1 ──cited by──▶ C1  labels/MANIFEST          trailer
                                    │ ancestor of, and cited by the run-log header
                                    ▼
                                   C2  runs/heldout-<stamp>.jsonl  header  labels_manifest: <C1>
+                                                                          rubric_hash: <rubric.yaml at F>
                                    │
                                    │ ancestor of, and cited by trailer
                                    ▼
@@ -75,6 +79,7 @@ C2 and C3 live in **one** repository, their order is also **git ancestry**.
 |---|---|
 | (a) rubric not designed against the labels | C1 cites F, and C1's committer date is later than F's (corroboration) |
 | (b) labels not tuned after judge output | C2's header cites C1; C1 is an ancestor of C2, and C2 of C3; both label files at C3 recompute to C1's manifest |
+| the run judged under the entry text the labels were written against | C2's header carries `rubric_hash`, `rubric.yaml` at F hashed as text (harness D183) |
 | P5 "first commit later than the tag" | C1 is the labels' first appearance in any form, and it cites F |
 | D26 | C2's header names C1, which resolves in this repository by construction |
 
@@ -103,7 +108,7 @@ as strong as the C1 push record.
 | Path | Commit | Contents |
 |---|---|---|
 | `labels/MANIFEST` | C1 | algorithm, freeze SHA, one digest line per sealed file |
-| `runs/heldout-<started_at>.jsonl` | C2 | the held-out judged run log, unmodified |
+| `runs/heldout-<started_at>-<mode>.jsonl` | C2 | the held-out judged run log, unmodified, under the name the harness gave it (harness D184) |
 | `labels/findings.yaml`, `labels/traces.yaml`, `labels/severity.json`, `labels/SALT` | C3 | byte-identical to what C1 sealed |
 
 **`CORPUS_VERSION`** sits at the root of this repository, tracked and on the workflow's allowlist. It
@@ -224,11 +229,11 @@ makes its content guessable.
 | 0 | — | The gate (§7) is merged **before** the tag exists. It is inert until then. | — |
 | 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F, and reads `severity.json` with the harness's severity loader. Generates the salt if absent. Writes `labels/MANIFEST`, or rewrites it when re-sealing before any run. Prints counts only. | tag absent; a run log already committed; plaintext already in `labels/`; either label file invalid; the severity export missing, refused by the harness's loader, or naming an id that is not a finding; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
 | 2 | owner | Commit **only** `labels/MANIFEST` with trailer `Rubric-Frozen: <F>`. Push and wait for CI. | CI red |
-| 3 | harness session | Held-out judged run, from the harness: `harness run --tier judge --mode live`, with `--transcripts` at this repository's transcripts directory, `--run-log-dir` outside the harness checkout and `--corpus-version-file` at this repository's `CORPUS_VERSION`, all absolute, and `--labels-manifest <C1>`. `--policies` stays the harness's, deliberately: both sets read the same policy documents. The header then carries `labels_manifest: <C1>`. | `--labels-manifest` absent, or not 40 lowercase hex characters; a run mixing declared and undeclared calls; a design-set run given the flag; any of those paths inside the harness checkout |
-| 4 | owner | Commit the log unmodified as `runs/heldout-<the harness's file name>`. The harness writes `<started_at, colons as hyphens>-<mode>.jsonl`, and the gate admits that name only under the `heldout-` prefix. The harness will write the prefix itself on a held-out run (D184); until that lands, this rename stands. Trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red; a name the gate does not admit |
+| 3 | harness session | Held-out judged run, from the harness: `harness run --tier judge --mode live`, with `--transcripts` at this repository's transcripts directory, `--run-log-dir` outside the harness checkout and `--corpus-version-file` at this repository's `CORPUS_VERSION`, all absolute, and `--labels-manifest <C1>`. `--policies` stays the harness's, deliberately: both sets read the same policy documents. The header then carries `labels_manifest: <C1>` and `rubric_hash`, over the `rubric.yaml` it judged under. | `--labels-manifest` absent, or not 40 lowercase hex characters; a run mixing declared and undeclared calls; a design-set run given the flag; any of those paths inside the harness checkout; a replay or a resume whose log names another rubric, or none |
+| 4 | owner | Commit the log unmodified, under the name the harness gave it: `heldout-<started_at, colons as hyphens>-<mode>.jsonl`, written with that prefix on a held-out run and on no other (harness D184). **Nothing is renamed**, which is what the prefix bought: a rename between a paid-for log and its commit is silent until the gate reads the path. Trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red; a name the gate does not admit |
 | 5 | tool: `label_manifest.py reveal` | Copies the three sealed files and the salt to `labels/`, keeping the private copies, and recomputes from the copies. Names the commit the reveal's `Judged-Run` trailer must cite. | no committed run log cites the current manifest and passes the gate's run-log checks; the labels no longer validate; recomputation fails; plaintext already in `labels/` |
 | 6 | owner | Commit with trailer `Judged-Run: <C2>`. Push. The plaintext is published. | CI red |
-| 7 | harness | Agreement, from this repository and outside the harness checkout: `--held-out-transcripts`, `--held-out-corpus-version-file`, `--held-out-run-log`, `--held-out-findings`, `--held-out-traces`, with `--held-out-policies` optional and defaulting to the harness's own. Coverage reads `labels/severity.json` after the reveal. | — |
+| 7 | harness | Agreement, from this repository and outside the harness checkout: `--held-out-transcripts`, `--held-out-corpus-version-file`, `--held-out-run-log`, `--held-out-findings`, `--held-out-traces`, with `--held-out-policies` optional and defaulting to the harness's own. Coverage reads `labels/severity.json` after the reveal. A rendered report over these calls is refused an `--out` path inside the harness checkout (harness D185), so it is written here or to stdout. | — |
 
 **No tool ever displays label content.** Tools report counts and pass or fail.
 
@@ -243,13 +248,13 @@ makes its content guessable.
 |---|---|---|
 | S0, before the freeze | nothing new | `labels/` and `runs/` do not exist. Today's behavior. |
 | S1 | `labels/MANIFEST` | tag resolves; every commit touching `MANIFEST` carries `Rubric-Frozen` equal to the tag's commit and is dated after it; the header states the same SHA; one digest line per sealed file, naming `findings.yaml`, `traces.yaml` and `severity.json`; no plaintext exists yet |
-| S2 | `runs/heldout-*.jsonl` | each header's `labels_manifest` equals the latest commit touching `MANIFEST` before that log's first commit, and is its ancestor; `rubric_version` and `prompt_template_hash` equal the harness's at F; `MANIFEST` untouched after the first log's commit |
+| S2 | `runs/heldout-*.jsonl` | each header's `labels_manifest` equals the latest commit touching `MANIFEST` before that log's first commit, and is its ancestor; `rubric_version`, `prompt_template_hash` and `rubric_hash` equal the harness's at F; `MANIFEST` untouched after the first log's commit |
 | S3 | `labels/findings.yaml`, `labels/traces.yaml`, `labels/severity.json`, `labels/SALT` | reveal commit carries `Judged-Run` naming a commit that added a valid log, and that commit is an ancestor; all three sealed files recompute to `MANIFEST`; `findings.yaml` loads; `traces.yaml` keys equal the rubric's entries at F, every finding is placed, and every held-out call is referenced or listed; none of the four touched afterwards |
 
 **Controls, all synthetic.** A scratch repository and a scratch "harness" with a planted tag. Each case
 must turn the gate red:
 - a manifest citing the wrong SHA, or committed before the tag;
-- a run log before the manifest, or citing a superseded one;
+- a run log before the manifest, citing a superseded one, or judged under another rubric or none;
 - plaintext before a run log, or not recomputing;
 - a manifest edited after a run, or labels edited after the reveal;
 - a traces file missing an entry, leaving a finding unplaced, or leaving a call neither referenced nor
@@ -262,18 +267,24 @@ must turn the gate red:
 - **The frozen template hash** is not a file digest: the harness hashes the halves it sends. So the
   gate runs F's own code, from an archive of F, rather than a copy of it. A test checks the result
   against the header of the reference run log the harness had committed at F.
+- **The rubric hash** is `rubric.yaml` at F, read as text and encoded UTF-8, which is how the
+  harness hashes the file it judged under (D183). The gate requires one, because a held-out log
+  carries it and only a held-out log is committed here: neither `rubric_version` nor the template hash
+  moves when an entry's question, criteria or scale text moves. No committed harness log carries one
+  to compare with, so a test checks this computation against the harness's own function instead.
 - **Added checks:** a run log never changes after the commit that adds it; no label file or salt
   appears in any commit before the reveal, even one deleted since; the sealed files and the salt are
   added once, in one commit; and `Judged-Run` is a full 40-character SHA.
 
 ## 8. Owed by the harness (rules only, for a harness session)
 
-**Status, 2026-09-15, at harness `6a0f144`.** Items 1 to 5 and 7 are delivered: the header key (D173);
-the paths refused inside the harness checkout and the absence check that refuses a held-out run log
-(D174); agreement over both label files, reporting the two sets apart (D175); the phase-5 verifier
-declaring this gate's criteria (D176); the standing rule against searching these sessions; and a
-decision entry (D177) with register entries O-9, O-10 and O-11. Item 6 is decided, and what it decided
-is below.
+**Status, 2026-09-16, at harness `44325dd`. Every item is delivered.** Items 1 to 5 and 7 landed by
+`6a0f144`: the header key (D173); the paths refused inside the harness checkout and the absence check
+that refuses a held-out run log (D174); agreement over both label files, reporting the two sets apart
+(D175); the phase-5 verifier declaring this gate's criteria (D176); the standing rule against searching
+these sessions; and a decision entry (D177) with register entries O-9, O-10 and O-11. Item 6 is
+decided, and what it decided is below. Items 8 to 11 landed with D181 to D186, the answers to this
+repository's four questions and the two decisions the harness took beside them.
 
 1. `RunLogHeader` gains `labels_manifest`, required on any run over the held-out set (D26): a key of
    the header record holding the manifest commit's full 40-character SHA, where `tools/label_gate.py`
@@ -292,16 +303,27 @@ is below.
    set's cuts moves those cuts (D144), and a person makes every comparison (D10). They are placed
    **before** the judged run, since afterwards whoever orders the findings can see which ones the judge
    missed, and the file is **sealed before that run in a form the gate can check**, then revealed with
-   the labels. How it is sealed is this repository's to decide, and the chain has no slot for it yet
-   (§11).
+   the labels. How it is sealed was this repository's to decide, and the chain has its slot:
+   `labels/severity.json`, sealed at C1 with the label files and revealed at C3 (§4).
 7. A decision entry recording this chain, and a `HOLDOUT-OBLIGATIONS.md` entry for it.
-8. **A rubric hash in the header** (harness D183), which replaces the trailer this document proposed:
-   a held-out run's header will carry a hash of `rubric.yaml` as text encoded UTF-8, and the gate
-   compares it with the same hash of `rubric.yaml` at F. Neither field the gate checks today moves
-   when an entry's text moves, and a harness commit that descends from the freeze proves nothing about
-   what it judged under. The key's name lands with the code; the gate's half is in §11.
+8. **A rubric hash in the header** (harness D183, D186), which replaces the trailer this document
+   proposed: a held-out run's header carries `rubric_hash`, a hash of `rubric.yaml` as text encoded
+   UTF-8, and the gate compares it with the same hash of `rubric.yaml` at F. Neither field the gate
+   checked before moves when an entry's text moves, and a harness commit that descends from the freeze
+   proves nothing about what it judged under. **Delivered 2026-09-16**, with a replay or a resume under
+   another rubric refused there and no override, and `rubric.yaml` and the prompt template pinned at
+   the harness's HEAD to the commit the tag names.
 9. **The `heldout-` prefix on a held-out run's log** (harness D184), keyed on the header carrying a
-   labels manifest. Until it lands, §6 step 4's rename stands.
+   labels manifest. **Delivered 2026-09-16**; §6 step 4 renames nothing.
+10. **This set's own corpus version** (harness D182): a held-out run takes `--corpus-version-file`, and
+    the harness refuses a path resolving inside its own checkout, beside the four paths D174 already
+    refused. **Delivered 2026-09-16**; this repository's file is `CORPUS_VERSION` (§4), so a header
+    committed here unmodified cannot describe the design corpus.
+11. **A report over held-out calls stays out of the harness tree** (harness D185): `harness report`
+    refuses an `--out` path inside that checkout over any call `HELDOUT_SET` declares, with stdout and
+    outside paths open, and the absence check reads a rendered report as a third shape beside
+    transcripts and run logs. Not asked for here, and it closes a route §6 step 7 would otherwise have
+    to remember. **Delivered 2026-09-16.**
 
 ## 9. Failure modes and what they cost
 
@@ -337,12 +359,9 @@ findings on 2026-09-12, 78 are traced by at least one rubric entry and 12 by non
 ## 11. Still open
 
 Found by the cross-project audit of 2026-09-15, which read both repositories at held-out `5760aa9` and
-harness `6a0f144`.
+harness `6a0f144`. Its other finding closed on 2026-09-16: the harness named the header key
+`rubric_hash`, and S2 compares it with `rubric.yaml` at F (§7, and §8 item 8).
 
-- **The rubric hash the gate will compare.** The harness is adding a header field carrying a hash of
-  the `rubric.yaml` a run judged under (D183). When it names the key, the gate computes the same hash
-  of `rubric.yaml` at F — read as text and encoded UTF-8, so line endings cannot move it — and refuses
-  a log that disagrees. Until then S2 stands as it is, and the proposed `C2` trailer is dropped.
 - **Conventions this set is held to by nothing.** The audit listed thirteen rules the harness enforces
   on the design set with no equivalent here; `tests/test_holdout_conventions.py` records them. Whether
   this set satisfies any of them needs the transcripts, so porting or recording the gap is the
@@ -354,8 +373,10 @@ Built in the order the workflow needs them. Each refuses to act before the freez
 
 1. `tools/make_label_worksheet.py`: the owner's worksheet (§5 step 1).
 2. `tools/build_review_folder.py`: the review folder and its `BRIEF.md` (§5 step 3).
-3. `tools/validate_labels.py`: the label validator, by stage: `drafts`, `findings`, and `all`, which
-   adds `traces.yaml` against the rubric at F (§5 steps 6 to 8).
+3. `tools/validate_labels.py`: the label validator, by stage: `drafts`, `findings`, `all`, which adds
+   `traces.yaml` against the rubric at F (§5 steps 6 to 8), and `severity`, which reads the export with
+   the harness's own loader (§5 step 9). `severity` stands outside `all` because the export arrives
+   after the labels do.
 4. `tools/make_label_findings.py`: the ledger-to-findings generator, with `--check` (§5 step 7).
 5. `tools/label_manifest.py seal | reveal` (§6 steps 1 and 5), tested with the gate in
    `tests/test_label_chain.py`.

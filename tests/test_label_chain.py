@@ -141,7 +141,7 @@ _SEVERITY: Final[bytes] = (
     + "\n"
 ).encode()
 EXPECTED: Final[chain.FrozenHeader] = chain.FrozenHeader(
-    rubric_version="1", prompt_template_hash="a" * 64
+    rubric_version="1", prompt_template_hash="a" * 64, rubric_hash="c" * 64
 )
 #: A committed log name: the harness writes <started_at, colons as hyphens>-<mode>.jsonl, and
 #: §6 step 4 commits it under the heldout- prefix the gate admits.
@@ -357,8 +357,17 @@ def _seal(
     return Commit(message, {chain.MANIFEST: manifest}, day)
 
 
-def _log(cites: str, *, day: int = 2, template_hash: str = EXPECTED.prompt_template_hash) -> Commit:
-    """A judged run's log: a header record citing `cites`, then one invented record."""
+def _log(
+    cites: str,
+    *,
+    day: int = 2,
+    template_hash: str = EXPECTED.prompt_template_hash,
+    rubric_hash: str | None = EXPECTED.rubric_hash,
+) -> Commit:
+    """A judged run's log: a header record citing `cites`, then one invented record.
+
+    `rubric_hash=None` leaves the key out, which is every log a harness before D183 wrote.
+    """
     header = {
         "record": "header",
         "rubric_version": EXPECTED.rubric_version,
@@ -369,6 +378,8 @@ def _log(cites: str, *, day: int = 2, template_hash: str = EXPECTED.prompt_templ
         "started_at": "2027-01-03T00:00:00Z",
         chain.LABELS_MANIFEST: cites,
     }
+    if rubric_hash is not None:
+        header[chain.RUBRIC_HASH] = rubric_hash
     body = json.dumps(header) + "\n" + json.dumps({"record": "invented"}) + "\n"
     return Commit("Add the held-out judged run", {RUN_LOG: body.encode()}, day)
 
@@ -480,6 +491,16 @@ def _run_under_another_template(repo: Path, freeze: str) -> None:
     _extend(repo, _log(sealed, template_hash="d" * 64))
 
 
+def _run_under_another_rubric(repo: Path, freeze: str) -> None:
+    sealed = _extend(repo, _base(), _seal(freeze, *_labels(freeze)))[1]
+    _extend(repo, _log(sealed, rubric_hash="e" * 64))
+
+
+def _run_naming_no_rubric(repo: Path, freeze: str) -> None:
+    sealed = _extend(repo, _base(), _seal(freeze, *_labels(freeze)))[1]
+    _extend(repo, _log(sealed, rubric_hash=None))
+
+
 def _manifest_edited_after_the_run(repo: Path, freeze: str) -> None:
     findings, traces = _labels(freeze)
     sealed = _extend(repo, _base(), _seal(freeze, findings, traces))[1]
@@ -520,6 +541,11 @@ _BEFORE_THE_REVEAL: Final[dict[str, tuple[Callable[[Path, str], None], str]]] = 
         _run_under_another_template,
         "prompt_template_hash is not the template's",
     ),
+    "a run log under another rubric": (
+        _run_under_another_rubric,
+        "rubric_hash is not rubric.yaml's",
+    ),
+    "a run log naming no rubric": (_run_naming_no_rubric, "names no rubric_hash"),
     "a manifest edited after a run": (
         _manifest_edited_after_the_run,
         f"after {RUN_LOG} was committed",
@@ -679,6 +705,31 @@ def test_the_frozen_template_hash_is_the_one_the_harness_recorded_at_its_freeze(
     computed = chain.frozen_header(HARNESS, freeze)
     assert computed.rubric_version == recorded["rubric_version"]
     assert computed.prompt_template_hash == recorded["prompt_template_hash"]
+
+
+@requires_harness
+def test_the_frozen_rubric_hash_agrees_with_the_harness_s_own_function(tmp_path: Path) -> None:
+    """The gate hashes a blob and the harness hashes a file; the two must agree (D186).
+
+    The reference run log at F cannot settle this one, the way it settles the template hash:
+    `rubric_hash` is written on a held-out run and on no other, so no log the harness has
+    committed carries one. Its own function is the evidence available, and a copy of the rule
+    would be two things that can disagree.
+    """
+    assert HARNESS is not None
+    freeze = worksheet.freeze_commit(HARNESS)
+    if freeze is None:
+        pytest.skip(f"{worksheet.FREEZE_TAG} is not fetched into this harness checkout")
+    try:
+        from harness.core.rubric import rubric_hash
+    except ImportError:
+        pytest.skip("this harness checkout is older than the rubric hash")
+
+    blob = chain.show(HARNESS, freeze, "rubric.yaml")
+    written = tmp_path / "rubric.yaml"
+    written.write_bytes(blob)
+
+    assert chain.rubric_digest(blob) == rubric_hash(written)
 
 
 def test_the_corpus_version_is_one_line_with_no_blanks() -> None:
