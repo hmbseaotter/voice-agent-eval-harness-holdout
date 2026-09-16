@@ -125,6 +125,7 @@ jobs:
           expected=$(printf '%s\n' \
             .github/workflows/checks.yml \
             .gitignore \
+            CORPUS_VERSION \
             LICENSE \
             NAMES \
             PERSONAS \

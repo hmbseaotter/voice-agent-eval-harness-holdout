@@ -38,6 +38,12 @@ Every held-out call must be referenced by a finding or listed under
 with it, and saying so is then a decision rather than an omission. That check
 waits for this stage because the list lives in `traces.yaml`.
 
+`severity` reads `severity.json` with the harness's own severity loader, which
+pins schema 3 and re-derives every band from the file's cuts, and checks that
+every id it names is a finding of this set. It is a stage of its own because the
+export is made after the mapping (§5 step 9) and before sealing, which is when
+`seal` runs it.
+
 THE EVIDENCE RULES ARE THE DESIGN SET'S
 --------------------------------------
 Ported from the harness's `tests/test_findings_evidence.py`, so a held-out
@@ -64,6 +70,7 @@ the harness's loader refuses, which is reported in the loader's own words.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -88,7 +95,10 @@ if TYPE_CHECKING:  # pragma: no cover - types only, and the harness may be absen
     from harness.core.events import Call
 
 LABELS: Final[Path] = PRIVATE / "labels"
-STAGES: Final[tuple[str, ...]] = ("drafts", "findings", "all")
+STAGES: Final[tuple[str, ...]] = ("drafts", "findings", "all", "severity")
+
+#: The severity export, under `private/labels/` before the seal and `labels/` after the reveal.
+SEVERITY_NAME: Final[str] = "severity.json"
 
 #: Held-out finding ids. The loader accepts any non-empty string, so the shape is
 #: this repository's rule. A prefix no design finding carries makes a collision
@@ -663,6 +673,51 @@ def calls_without_findings(document: object) -> set[str] | None:
     return set(listed) if _id_list(listed) else None
 
 
+def severity_problems(path: Path, finding_ids: Sequence[str]) -> list[str]:
+    """The severity export, read by the harness's own loader, and its ids against the findings.
+
+    Two rules, and deliberately not a third. It must load under `harness.core.severity`,
+    which pins schema 3 and re-derives every band from the cuts, so what is sealed is the
+    scoring tool's own export rather than a hand edit. And every id it names must be a
+    finding of this set. It need **not** name every finding: the design set's own export
+    scores 83 of its 90 and lists none unplaced, so a coverage rule here would refuse the
+    shape the tool actually writes.
+    """
+    from harness.core.severity import SeverityError, load_severity
+
+    if not path.is_file():
+        return [f"{path.name} does not exist; the bands are placed and exported before sealing"]
+    try:
+        severity = load_severity(path)
+    except SeverityError as error:
+        return [f"{path.name}: the harness's severity loader refuses it: {error}"]
+    except json.JSONDecodeError:
+        return [f"{path.name}: not JSON"]
+    except UnicodeDecodeError:
+        return [f"{path.name}: not UTF-8 text"]
+
+    named = {record.id for record in severity.severities} | set(severity.unplaced)
+    strangers = sorted(named - set(finding_ids), key=id_order)
+    if strangers:
+        return [
+            f"{path.name}: {len(strangers)} ids are not findings of this set: "
+            f"{', '.join(strangers)}"
+        ]
+    return []
+
+
+def _severity_stage(labels: Path) -> tuple[list[str], str]:
+    """The `severity` stage: the findings supply the ids the export is held to."""
+    findings = labels / "findings.yaml"
+    if not findings.is_file():
+        return [f"findings.yaml does not exist under {labels}"], ""
+    rows, problems = parse_findings_document(findings.read_text(encoding="utf-8"))
+    if problems:
+        return problems, ""
+    found = severity_problems(labels / SEVERITY_NAME, [row.id for row in rows])
+    return found, f"{len(rows)} findings; the export names no id that is not one of them"
+
+
 # --------------------------------------------------------------------------
 # Running it
 # --------------------------------------------------------------------------
@@ -676,6 +731,8 @@ def validate(
 
     if str(harness / "src") not in sys.path:
         sys.path.insert(0, str(harness / "src"))
+    if stage == "severity":
+        return _severity_stage(labels)
     name = "drafts.yaml" if stage == "drafts" else "findings.yaml"
     path = labels / name
     if not path.is_file():
@@ -764,7 +821,7 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         choices=STAGES,
         default="all",
-        help="drafts, findings, or all: findings and traces together (the default)",
+        help="drafts, findings, all (findings and traces together, the default), or severity",
     )
     args = parser.parse_args(argv)
 

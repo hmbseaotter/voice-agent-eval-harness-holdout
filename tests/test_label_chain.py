@@ -25,7 +25,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
@@ -63,9 +63,83 @@ _IDENTITY: Final[dict[str, str]] = {
 FROZEN_AT: Final[int] = 1_798_761_600
 DAY: Final[int] = 86_400
 SALT: Final[str] = "c" * 64
-#: The invented severity export. The chain seals its bytes, so its shape matters only
-#: in that `seal` refuses one that is missing, empty or not JSON.
-_SEVERITY: Final[bytes] = b'{"schema": 0, "invented": true, "bands": []}\n'
+#: The invented severity export, in the harness's schema 3: four rows in descending theta,
+#: and the three cuts anchored on them, which is the smallest shape its loader accepts.
+_SEVERITY: Final[bytes] = (
+    json.dumps(
+        {
+            "schema_version": "3",
+            "anchor_set_version": "1",
+            "comparison_log_hash": "0" * 64,
+            "run_id": "invented",
+            "calibration": {
+                "critical_high": "An invented boundary.",
+                "high_medium": "An invented boundary.",
+                "medium_low": "An invented boundary.",
+            },
+            "severities": [
+                {
+                    "id": "HF-01",
+                    "severity": "critical",
+                    "theta": 3.0,
+                    "content_hash": "a" * 64,
+                    "appearances": 10,
+                    "informative": 8,
+                },
+                {
+                    "id": "HF-02",
+                    "severity": "high",
+                    "theta": 1.0,
+                    "content_hash": "b" * 64,
+                    "appearances": 10,
+                    "informative": 8,
+                },
+                {
+                    "id": "HF-03",
+                    "severity": "medium",
+                    "theta": -1.0,
+                    "content_hash": "c" * 64,
+                    "appearances": 10,
+                    "informative": 8,
+                },
+                {
+                    "id": "HF-04",
+                    "severity": "low",
+                    "theta": -3.0,
+                    "content_hash": "d" * 64,
+                    "appearances": 10,
+                    "informative": 8,
+                },
+            ],
+            "unplaced": [],
+            "cuts": [
+                {
+                    "name": "critical_high",
+                    "above_id": "HF-01",
+                    "below_id": "HF-02",
+                    "gap": 2.0,
+                    "between": [],
+                },
+                {
+                    "name": "high_medium",
+                    "above_id": "HF-02",
+                    "below_id": "HF-03",
+                    "gap": 2.0,
+                    "between": [],
+                },
+                {
+                    "name": "medium_low",
+                    "above_id": "HF-03",
+                    "below_id": "HF-04",
+                    "gap": 2.0,
+                    "between": [],
+                },
+            ],
+        },
+        indent=2,
+    )
+    + "\n"
+).encode()
 EXPECTED: Final[chain.FrozenHeader] = chain.FrozenHeader(
     rubric_version="1", prompt_template_hash="a" * 64
 )
@@ -132,6 +206,24 @@ findings:
     consequence: Another invented consequence.
     detectable_by: assert
     tier: question
+  - id: HF-03
+    call_ref: CALL-90
+    owner: data
+    observation: A third invented observation.
+    evidence:
+      - 'event 3 — "Single line."'
+    consequence: A third invented consequence.
+    detectable_by: human
+    tier: defect
+  - id: HF-04
+    call_ref: CALL-91
+    owner: agent
+    observation: A fourth invented observation.
+    evidence:
+      - 'event 1 — "Second call."'
+    consequence: A fourth invented consequence.
+    detectable_by: judge
+    tier: defect
 """
 
 
@@ -139,8 +231,8 @@ def _traces(freeze: str, *, uncovered: str = "[HF-02]") -> str:
     return (
         f"{worksheet.FREEZE_TAG}: '{freeze}'\n"
         "traces:\n"
-        "  A-alpha: [HF-01]\n"
-        "  J-beta: []\n"
+        "  A-alpha: [HF-01, HF-03]\n"
+        "  J-beta: [HF-04]\n"
         f"uncovered: {uncovered}\n"
         "calls_without_findings: []\n"
     )
@@ -297,6 +389,16 @@ def _reveal(
         chain.SALT: SALT.encode(),
     }
     return Commit(f"Reveal the held-out labels{trailer}\n", files, day)
+
+
+def _severity_document() -> dict[str, Any]:
+    """The invented export as a mapping, for a control to break one field of."""
+    document: dict[str, Any] = json.loads(_SEVERITY)
+    return document
+
+
+def _severity_bytes(document: dict[str, Any]) -> bytes:
+    return (json.dumps(document, indent=2) + "\n").encode()
 
 
 def _expected(_harness: Path, _freeze: str) -> chain.FrozenHeader:
@@ -579,6 +681,18 @@ def test_the_frozen_template_hash_is_the_one_the_harness_recorded_at_its_freeze(
     assert computed.prompt_template_hash == recorded["prompt_template_hash"]
 
 
+def test_the_corpus_version_is_one_line_with_no_blanks() -> None:
+    """The harness stamps it into every held-out header, committed here unmodified (D182)."""
+    text = (REPO_ROOT / "CORPUS_VERSION").read_text(encoding="utf-8")
+    lines = text.splitlines()
+
+    assert text.endswith("\n")
+    assert len(lines) == 1, "one line, so what the header carries is unambiguous"
+    assert lines[0] != "", "the harness refuses a blank corpus version"
+    assert lines[0] == lines[0].strip()
+    assert " " not in lines[0]
+
+
 def test_a_rendered_manifest_parses_back_and_a_malformed_one_does_not() -> None:
     """The five lines §4 specifies, and nothing that merely resembles them."""
     digests = {path: "d" * 64 for path in chain.SEALED}
@@ -672,7 +786,7 @@ def test_seal_refuses_labels_that_do_not_validate(
     """Invalid labels get no manifest, and no salt is made for them either."""
     harness, freeze = stand_in
     repo = _held_out(tmp_path / "repo")
-    broken = _traces(freeze).replace("  J-beta: []\n", "")
+    broken = _traces(freeze).replace("  J-beta: [HF-04]\n", "")
     private = _private_labels(tmp_path / "private", freeze, traces=broken)
 
     assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
@@ -697,7 +811,30 @@ def test_seal_refuses_without_the_severity_export(
     (private / "severity.json").write_bytes(b"bands, but not JSON\n")
     assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
     assert not (repo / chain.MANIFEST).exists()
-    assert "is not JSON" in capsys.readouterr().err
+    assert "not JSON" in capsys.readouterr().err
+
+
+@requires_harness
+def test_seal_refuses_an_export_the_harness_would_not_read(
+    stand_in: tuple[Path, str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Schema 3 and the ids are the harness's rules, checked by its own loader (harness D181)."""
+    harness, freeze = stand_in
+    repo = _held_out(tmp_path / "repo")
+
+    older = _severity_document()
+    older["schema_version"] = "1"
+    private = _private_labels(tmp_path / "old", freeze, severity=_severity_bytes(older))
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
+    assert "refuses it" in capsys.readouterr().err
+
+    stranger = _severity_document()
+    stranger["severities"][0]["id"] = "HF-99"
+    stranger["cuts"][0]["above_id"] = "HF-99"
+    private = _private_labels(tmp_path / "stranger", freeze, severity=_severity_bytes(stranger))
+    assert manifest_tool.seal(repo=repo, harness=harness, private=private) == 1
+    assert "are not findings of this set: HF-99" in capsys.readouterr().err
+    assert not (repo / chain.MANIFEST).exists()
 
 
 @requires_harness

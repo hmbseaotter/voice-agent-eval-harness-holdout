@@ -106,6 +106,12 @@ as strong as the C1 push record.
 | `runs/heldout-<started_at>.jsonl` | C2 | the held-out judged run log, unmodified |
 | `labels/findings.yaml`, `labels/traces.yaml`, `labels/severity.json`, `labels/SALT` | C3 | byte-identical to what C1 sealed |
 
+**`CORPUS_VERSION`** sits at the root of this repository, tracked and on the workflow's allowlist. It
+holds this set's own version string, which the harness stamps into every held-out run-log header from
+`--corpus-version-file` (harness D182). It is not the design corpus's version: a header committed here
+unmodified would otherwise describe a corpus that run never read. Bump it if a transcript ever changes,
+which would invalidate the labels anyway.
+
 **`findings.yaml`** uses the gold-set format exactly, so `harness.core.findings` loads it: eight
 required keys and no unknown ones. **Held-out ids are shaped `HF-NN`**, two digits or more. The loader
 accepts any non-empty string, so the shape is this repository's rule: a prefix no design finding
@@ -132,10 +138,16 @@ forgotten, but a call with nothing wrong could then be sealed only by inventing 
 keeps the omission impossible and makes "nothing wrong here" a recorded decision, sealed with the
 mapping so it cannot change after the run.
 
-**`severity.json`** is sealed as bytes, and nothing here reads inside it. The bands are labels
-(D10), their store is a separate `comparative-judgment` one kept outside both repositories (harness
-O-10), and the schema is the harness's to state. `seal` refuses an export that is missing, empty or
-not JSON; the validation that reads inside it is owed in §11.
+**`severity.json`** is the scoring tool's export, in the harness's schema 3 (harness D181): the top
+level carries `schema_version`, `anchor_set_version`, `comparison_log_hash`, `run_id`, `calibration`,
+`severities`, `unplaced` and `cuts`; each row carries `id`, `severity`, `theta`, `content_hash`,
+`appearances` and `informative`; and all three cuts travel in the same file.
+`tools/validate_labels.py severity` reads it with the harness's own loader, which pins the schema and
+re-derives every band from the cuts, and checks that every id it names is a finding of this set. It
+does **not** require the export to name every finding: the design set's own scores 83 of its 90 and
+lists none unplaced. `content_hash` is the hash of the finding text a band was placed on, and the
+harness checks it after the reveal, so a finding's text must not move after the export: re-export
+rather than edit either side of it.
 
 **`MANIFEST`** can be recomputed with standard tools and no project code:
 
@@ -202,6 +214,7 @@ makes its content guessable.
    own, kept outside both repositories, and exports the result to `private/labels/severity.json`. It
    happens before the judged run, because afterwards whoever orders the findings can see which ones the
    judge missed, and the export is sealed with the labels and revealed with them (harness O-10, D177).
+   `tools/validate_labels.py severity` reads the export with the harness's loader before it is sealed.
 10. **Seal, then run, then reveal** (§6).
 
 ## 6. Seal, run, reveal
@@ -209,13 +222,13 @@ makes its content guessable.
 | Step | Who | Action | Refused when |
 |---|---|---|---|
 | 0 | — | The gate (§7) is merged **before** the tag exists. It is inert until then. | — |
-| 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F, and seals `severity.json` as bytes. Generates the salt if absent. Writes `labels/MANIFEST`, or rewrites it when re-sealing before any run. Prints counts only. | tag absent; a run log already committed; plaintext already in `labels/`; either label file invalid; the severity export missing, empty or not JSON; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
+| 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F, and reads `severity.json` with the harness's severity loader. Generates the salt if absent. Writes `labels/MANIFEST`, or rewrites it when re-sealing before any run. Prints counts only. | tag absent; a run log already committed; plaintext already in `labels/`; either label file invalid; the severity export missing, refused by the harness's loader, or naming an id that is not a finding; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
 | 2 | owner | Commit **only** `labels/MANIFEST` with trailer `Rubric-Frozen: <F>`. Push and wait for CI. | CI red |
-| 3 | harness session | Held-out judged run, from the harness: `harness run --tier judge --mode live`, with `--transcripts` at this repository's transcripts directory and `--run-log-dir` outside the harness checkout, both absolute, and `--labels-manifest <C1>`. The header then carries `labels_manifest: <C1>`. | `--labels-manifest` absent, or not 40 lowercase hex characters; a run mixing declared and undeclared calls; a design-set run given the flag; any of those paths inside the harness checkout |
-| 4 | owner | Commit the log unmodified as `runs/heldout-<the harness's file name>`. The harness writes `<started_at, colons as hyphens>-<mode>.jsonl`, and the gate admits that name only under the `heldout-` prefix. Trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red; a name the gate does not admit |
+| 3 | harness session | Held-out judged run, from the harness: `harness run --tier judge --mode live`, with `--transcripts` at this repository's transcripts directory, `--run-log-dir` outside the harness checkout and `--corpus-version-file` at this repository's `CORPUS_VERSION`, all absolute, and `--labels-manifest <C1>`. `--policies` stays the harness's, deliberately: both sets read the same policy documents. The header then carries `labels_manifest: <C1>`. | `--labels-manifest` absent, or not 40 lowercase hex characters; a run mixing declared and undeclared calls; a design-set run given the flag; any of those paths inside the harness checkout |
+| 4 | owner | Commit the log unmodified as `runs/heldout-<the harness's file name>`. The harness writes `<started_at, colons as hyphens>-<mode>.jsonl`, and the gate admits that name only under the `heldout-` prefix. The harness will write the prefix itself on a held-out run (D184); until that lands, this rename stands. Trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red; a name the gate does not admit |
 | 5 | tool: `label_manifest.py reveal` | Copies the three sealed files and the salt to `labels/`, keeping the private copies, and recomputes from the copies. Names the commit the reveal's `Judged-Run` trailer must cite. | no committed run log cites the current manifest and passes the gate's run-log checks; the labels no longer validate; recomputation fails; plaintext already in `labels/` |
 | 6 | owner | Commit with trailer `Judged-Run: <C2>`. Push. The plaintext is published. | CI red |
-| 7 | harness | Agreement and coverage, from `labels/` and `runs/` in this repository. | — |
+| 7 | harness | Agreement, from this repository and outside the harness checkout: `--held-out-transcripts`, `--held-out-corpus-version-file`, `--held-out-run-log`, `--held-out-findings`, `--held-out-traces`, with `--held-out-policies` optional and defaulting to the harness's own. Coverage reads `labels/severity.json` after the reveal. | — |
 
 **No tool ever displays label content.** Tools report counts and pass or fail.
 
@@ -282,6 +295,13 @@ is below.
    the labels. How it is sealed is this repository's to decide, and the chain has no slot for it yet
    (§11).
 7. A decision entry recording this chain, and a `HOLDOUT-OBLIGATIONS.md` entry for it.
+8. **A rubric hash in the header** (harness D183), which replaces the trailer this document proposed:
+   a held-out run's header will carry a hash of `rubric.yaml` as text encoded UTF-8, and the gate
+   compares it with the same hash of `rubric.yaml` at F. Neither field the gate checks today moves
+   when an entry's text moves, and a harness commit that descends from the freeze proves nothing about
+   what it judged under. The key's name lands with the code; the gate's half is in §11.
+9. **The `heldout-` prefix on a held-out run's log** (harness D184), keyed on the header carrying a
+   labels manifest. Until it lands, §6 step 4's rename stands.
 
 ## 9. Failure modes and what they cost
 
@@ -319,20 +339,10 @@ findings on 2026-09-12, 78 are traced by at least one rubric entry and 12 by non
 Found by the cross-project audit of 2026-09-15, which read both repositories at held-out `5760aa9` and
 harness `6a0f144`.
 
-- **Reading inside the sealed severity file.** The slot exists: `labels/severity.json` is sealed
-  with the labels at C1 and revealed with them at C3, and `seal` refuses an export that is missing,
-  empty or not JSON. Nothing reads further in. When the harness states the schema its coverage report
-  expects, add the validation that belongs here — every id a finding of this set, and the bands the
-  held-out store's own — and record the schema in §4.
-- **The held-out corpus version.** The harness stamps `corpus_version` into every run-log header from a
-  file, and its agreement command requires `--held-out-corpus-version-file`. This repository has no
-  such file, so a run made as §6 reads would stamp the design corpus's version into a header committed
-  here unmodified. Decide where it lives, here under the allowlist or outside both trees, and name it
-  in §6 steps 3 and 7.
-- **What C2 records about the harness.** The gate holds a run log to the rubric version and the
-  template hash at F, and neither moves when the text of a rubric entry does. The header carries no
-  harness commit, so C2's commit message is the only place one could go: a trailer beside
-  `Labels-Manifest-CI`, which the gate could check descends from F.
+- **The rubric hash the gate will compare.** The harness is adding a header field carrying a hash of
+  the `rubric.yaml` a run judged under (D183). When it names the key, the gate computes the same hash
+  of `rubric.yaml` at F — read as text and encoded UTF-8, so line endings cannot move it — and refuses
+  a log that disagrees. Until then S2 stands as it is, and the proposed `C2` trailer is dropped.
 - **Conventions this set is held to by nothing.** The audit listed thirteen rules the harness enforces
   on the design set with no equivalent here; `tests/test_holdout_conventions.py` records them. Whether
   this set satisfies any of them needs the transcripts, so porting or recording the gap is the

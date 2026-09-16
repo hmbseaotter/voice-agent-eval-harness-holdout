@@ -30,8 +30,8 @@ include the ones before it.
   `labels/SALT`, added once and together by a commit that carries
   `Judged-Run: <C2>`, where C2 added a log that passes S2 and is an ancestor of
   the reveal. All three sealed files recompute to the manifest, the two label
-  files pass `tools/validate_labels.py`, and none of the four changes
-  afterwards.
+  files and the severity export pass `tools/validate_labels.py`, and none of the
+  four changes afterwards.
 
 Anything else under `labels/` or `runs/` fails, whatever it is called.
 
@@ -74,7 +74,7 @@ from typing import TYPE_CHECKING, Final
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from make_label_worksheet import FREEZE_TAG, REPO_ROOT, freeze_commit, harness_root
-from validate_labels import validate
+from validate_labels import SEVERITY_NAME, validate
 
 if TYPE_CHECKING:  # pragma: no cover - types only
     from collections.abc import Callable
@@ -83,7 +83,7 @@ MANIFEST: Final[str] = "labels/MANIFEST"
 #: The held-out bands, exported from a `comparative-judgment` store of their own kept
 #: outside both repositories (harness O-10). The chain seals its bytes and reads nothing
 #: inside it: the bands are labels (D10), and their schema is the harness's to state.
-SEVERITY: Final[str] = "labels/severity.json"
+SEVERITY: Final[str] = f"labels/{SEVERITY_NAME}"
 SEALED: Final[tuple[str, ...]] = ("labels/findings.yaml", "labels/traces.yaml", SEVERITY)
 SALT: Final[str] = "labels/SALT"
 PLAINTEXT: Final[tuple[str, ...]] = (*SEALED, SALT)
@@ -381,7 +381,7 @@ def log_problems(repo: Path, path: str, expected: FrozenHeader) -> tuple[str, li
 
 
 def _committed_label_problems(repo: Path, harness: Path, freeze: str) -> list[str]:
-    """`tools/validate_labels.py` at its `all` stage, over the committed labels and transcripts."""
+    """`tools/validate_labels.py` over the committed labels: its `all` stage, then `severity`."""
     with tempfile.TemporaryDirectory() as scratch:
         root = Path(scratch)
         archive = _git(repo, "archive", "--format=tar", "HEAD", "labels", "transcripts")
@@ -394,7 +394,14 @@ def _committed_label_problems(repo: Path, harness: Path, freeze: str) -> list[st
             labels=root / "labels",
             transcripts=root / "transcripts",
         )
-    return problems
+        bands, _ = validate(
+            "severity",
+            harness=harness,
+            freeze_sha=freeze,
+            labels=root / "labels",
+            transcripts=root / "transcripts",
+        )
+    return problems + bands
 
 
 def gate(

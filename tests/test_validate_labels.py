@@ -260,12 +260,17 @@ def test_the_validator_refuses_before_the_freeze(
 def test_a_clean_label_set_passes_every_stage(
     stand_in: Path, transcripts: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Drafts, findings, and findings with traces: each passes, and says what it checked."""
+    """Drafts, findings, and findings with traces: each passes, and says what it checked.
+
+    The `severity` stage is exercised in `tests/test_label_chain.py` instead: an export the
+    harness's loader accepts anchors three cuts on four findings, and this file's invented
+    set has two.
+    """
     sha = worksheet.freeze_commit(stand_in)
     assert sha is not None
     labels = _labels(tmp_path / "labels", drafts=_DRAFTS, findings=_FINDINGS, traces=_traces(sha))
 
-    for stage in validator.STAGES:
+    for stage in [name for name in validator.STAGES if name != "severity"]:
         assert (
             validator.check(stage, harness=stand_in, labels=labels, transcripts=transcripts) == 0
         ), stage
@@ -279,6 +284,18 @@ def test_a_clean_label_set_passes_every_stage(
     assert "traces place every finding against 2 frozen entries" in printed.out
     assert "every held-out call is referenced or declared without findings" in printed.out
     assert not _repeated(printed.out)
+
+
+@requires_harness
+def test_a_severity_export_that_is_absent_or_unreadable_is_named(tmp_path: Path) -> None:
+    """The two refusals that need no valid export; every other one is the loader's to give."""
+    assert validator.severity_problems(tmp_path / "severity.json", ["HF-01"]) == [
+        "severity.json does not exist; the bands are placed and exported before sealing"
+    ]
+
+    written = tmp_path / "severity.json"
+    written.write_text("bands, but not JSON\n", encoding="utf-8")
+    assert validator.severity_problems(written, ["HF-01"]) == ["severity.json: not JSON"]
 
 
 @requires_harness

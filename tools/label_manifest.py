@@ -20,7 +20,8 @@ SEAL
 Refuses before the freeze, once a run log is committed (the manifest a run was
 measured against never changes), when plaintext is already in `labels/`, when
 the labels do not pass `tools/validate_labels.py`, and when the severity export
-is missing, empty or not JSON. Generates
+is missing, refused by the harness's severity loader, or names an id that is not
+a finding of this set. Generates
 `private/labels/SALT` when it is absent: 32 random bytes as 64 lowercase hex
 characters and no newline, so §4's `cat` recipe reproduces each digest.
 Re-sealing before any run rewrites the manifest, and says so.
@@ -46,7 +47,6 @@ Counts and commit ids, never a label.
 from __future__ import annotations
 
 import argparse
-import json
 import secrets
 import sys
 from pathlib import Path
@@ -75,7 +75,7 @@ from label_gate import (
     valid_salt,
 )
 from make_label_worksheet import FREEZE_TAG, REPO_ROOT, freeze_commit, harness_root
-from validate_labels import LABELS, validate
+from validate_labels import LABELS, parse_findings_document, severity_problems, validate
 
 if TYPE_CHECKING:  # pragma: no cover - types only
     from collections.abc import Callable
@@ -98,21 +98,17 @@ def _private(private: Path, path: str) -> Path:
 def _unsealable(private: Path) -> list[str]:
     """Why the severity export cannot be sealed, if it cannot.
 
-    Read no further than JSON. The bands are labels (D10) and the schema is the harness's
-    to state, so what is checked here is that a file exists to seal and that it is not a
-    truncated export; the validation that reads inside it is owed in §11.
+    The harness's own loader decides, because it is the code that reads the file again
+    after the reveal (harness D181): schema 3, cuts that agree with the rows, and no id
+    that is not a finding of this set.
     """
-    path = _private(private, SEVERITY)
-    if not path.is_file():
-        return [f"{path} does not exist; place the bands and export them before sealing (O-10)"]
-    data = path.read_bytes()
-    if not data.strip():
-        return [f"{path} is empty"]
-    try:
-        json.loads(data)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return [f"{path} is not JSON"]
-    return []
+    findings = _private(private, "findings.yaml")
+    if not findings.is_file():
+        return [f"{findings} does not exist"]
+    rows, problems = parse_findings_document(findings.read_text(encoding="utf-8"))
+    if problems:
+        return problems
+    return severity_problems(_private(private, SEVERITY), [row.id for row in rows])
 
 
 def seal(*, repo: Path = REPO_ROOT, harness: Path, private: Path = LABELS) -> int:
