@@ -66,7 +66,9 @@ SALT: Final[str] = "c" * 64
 EXPECTED: Final[chain.FrozenHeader] = chain.FrozenHeader(
     rubric_version="1", prompt_template_hash="a" * 64
 )
-RUN_LOG: Final[str] = "runs/heldout-2027-01-03.jsonl"
+#: A committed log name: the harness writes <started_at, colons as hyphens>-<mode>.jsonl, and
+#: §6 step 4 commits it under the heldout- prefix the gate admits.
+RUN_LOG: Final[str] = "runs/heldout-2027-01-03T10-00-00Z-live.jsonl"
 
 _RUBRIC: Final[str] = "version: '1'\nentries:\n  - id: A-alpha\n  - id: J-beta\n"
 

@@ -34,8 +34,11 @@ transcript, and no statement about what the labels will say (D61). Every example
 2. **A held-out run log contains held-out transcript text.** The run log stores "the exact prompt
    sent" (D128), and a judged prompt embeds the transcript. That log can **never be committed to the
    harness**. It is committed here.
-3. **The run-log header has no manifest field yet.** `RunLogHeader` carries `rubric_version`,
-   `prompt_template_hash`, `corpus_version`, `artifact_hash`, `mode` and `started_at`.
+3. **The run-log header names the manifest.** `RunLogHeader` carries `rubric_version`,
+   `prompt_template_hash`, `corpus_version`, `artifact_hash`, `mode`, `started_at`, and, when they are
+   set, `resumed_from` and `labels_manifest` (delivered 2026-09-15, harness D173). The harness requires
+   `labels_manifest` on a run over the calls `HELDOUT_SET` declares, refuses it on any other run, and
+   checks only its shape. That the commit it names is the manifest in force is checked here, at S2.
 4. **CI could not see the freeze tag.** Both checkouts used the default `fetch-depth: 1` until the gate
    set both to `fetch-depth: 0`, which fetches all history and tags (confirmed against the
    `actions/checkout` documentation).
@@ -196,8 +199,8 @@ makes its content guessable.
 | 0 | — | The gate (§7) is merged **before** the tag exists. It is inert until then. | — |
 | 1 | tool: `label_manifest.py seal` | Validates `findings.yaml` against the gold-set loader and `traces.yaml` against the rubric at F. Generates the salt if absent. Writes `labels/MANIFEST`, or rewrites it when re-sealing before any run. Prints counts only. | tag absent; a run log already committed; plaintext already in `labels/`; either file invalid; any `HELDOUT_SET` call neither referenced by a finding nor listed under `calls_without_findings` |
 | 2 | owner | Commit **only** `labels/MANIFEST` with trailer `Rubric-Frozen: <F>`. Push and wait for CI. | CI red |
-| 3 | harness session | Held-out judged run with header `labels_manifest: <C1>`; the log is written outside the harness tree. | header field missing; manifest commit not found |
-| 4 | owner | Commit the log to `runs/` with trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red |
+| 3 | harness session | Held-out judged run, from the harness: `harness run --tier judge --mode live`, with `--transcripts` at this repository's transcripts directory and `--run-log-dir` outside the harness checkout, both absolute, and `--labels-manifest <C1>`. The header then carries `labels_manifest: <C1>`. | `--labels-manifest` absent, or not 40 lowercase hex characters; a run mixing declared and undeclared calls; a design-set run given the flag; any of those paths inside the harness checkout |
+| 4 | owner | Commit the log unmodified as `runs/heldout-<the harness's file name>`. The harness writes `<started_at, colons as hyphens>-<mode>.jsonl`, and the gate admits that name only under the `heldout-` prefix. Trailer `Labels-Manifest-CI: <Actions run ID of C1>`. Push. | CI red; a name the gate does not admit |
 | 5 | tool: `label_manifest.py reveal` | Copies both files and the salt to `labels/`, keeping the private copies, and recomputes from the copies. Names the commit the reveal's `Judged-Run` trailer must cite. | no committed run log cites the current manifest and passes the gate's run-log checks; the labels no longer validate; recomputation fails; plaintext already in `labels/` |
 | 6 | owner | Commit with trailer `Judged-Run: <C2>`. Push. The plaintext is published. | CI red |
 | 7 | harness | Agreement and coverage, from `labels/` and `runs/` in this repository. | — |
@@ -240,6 +243,13 @@ must turn the gate red:
 
 ## 8. Owed by the harness (rules only, for a harness session)
 
+**Status, 2026-09-15, at harness `6a0f144`.** Items 1 to 5 and 7 are delivered: the header key (D173);
+the paths refused inside the harness checkout and the absence check that refuses a held-out run log
+(D174); agreement over both label files, reporting the two sets apart (D175); the phase-5 verifier
+declaring this gate's criteria (D176); the standing rule against searching these sessions; and a
+decision entry (D177) with register entries O-9, O-10 and O-11. Item 6 is decided, and what it decided
+is below.
+
 1. `RunLogHeader` gains `labels_manifest`, required on any run over the held-out set (D26): a key of
    the header record holding the manifest commit's full 40-character SHA, where `tools/label_gate.py`
    reads it.
@@ -252,9 +262,13 @@ must turn the gate red:
    harness verifier should say so.
 5. **Harness session prompts forbid searching this repository's labeling sessions before the reveal**
    (§2, fact 6).
-6. **Decide whether phase 5 needs held-out severity.** If it does, score it in a **separate**
-   `comparative-judgment` store: placing findings against the design set's cuts moves those cuts (D144).
-   Severities are labels (D10), so they stay in `private/` and are sealed or scored after the reveal.
+6. **Held-out severity: decided (O-10, D177).** The bands are placed in a **separate**
+   `comparative-judgment` store kept outside the harness tree, because placing them against the design
+   set's cuts moves those cuts (D144), and a person makes every comparison (D10). They are placed
+   **before** the judged run, since afterwards whoever orders the findings can see which ones the judge
+   missed, and the file is **sealed before that run in a form the gate can check**, then revealed with
+   the labels. How it is sealed is this repository's to decide, and the chain has no slot for it yet
+   (§11).
 7. A decision entry recording this chain, and a `HOLDOUT-OBLIGATIONS.md` entry for it.
 
 ## 9. Failure modes and what they cost
@@ -290,7 +304,29 @@ findings on 2026-09-12, 78 are traced by at least one rubric entry and 12 by non
 
 ## 11. Still open
 
-- Whether phase 5 needs held-out severity, and in which store (§8, item 6).
+Found by the cross-project audit of 2026-09-15, which read both repositories at held-out `5760aa9` and
+harness `6a0f144`.
+
+- **A slot for the sealed severity file.** O-10 places the bands before the judged run and asks for
+  them sealed in a form the gate can check. The chain seals exactly `findings.yaml` and `traces.yaml`,
+  and the gate admits only those, the salt and the manifest. Settle it before C1, because the manifest
+  never changes once a run cites it: either a third sealed file, with its digest line in the manifest
+  and its path admitted at S3 (`SEALED`, `render_manifest`, `parse_manifest`, seal, reveal and the S3
+  recomputation moving together), or a second sealed artifact the gate admits by name. The harness
+  states the file's name, schema and location; record the answer in §4 and §6.
+- **The held-out corpus version.** The harness stamps `corpus_version` into every run-log header from a
+  file, and its agreement command requires `--held-out-corpus-version-file`. This repository has no
+  such file, so a run made as §6 reads would stamp the design corpus's version into a header committed
+  here unmodified. Decide where it lives, here under the allowlist or outside both trees, and name it
+  in §6 steps 3 and 7.
+- **What C2 records about the harness.** The gate holds a run log to the rubric version and the
+  template hash at F, and neither moves when the text of a rubric entry does. The header carries no
+  harness commit, so C2's commit message is the only place one could go: a trailer beside
+  `Labels-Manifest-CI`, which the gate could check descends from F.
+- **Conventions this set is held to by nothing.** The audit listed thirteen rules the harness enforces
+  on the design set with no equivalent here; `tests/test_holdout_conventions.py` records them. Whether
+  this set satisfies any of them needs the transcripts, so porting or recording the gap is the
+  owner's call.
 
 ## 12. Tools in this repository
 

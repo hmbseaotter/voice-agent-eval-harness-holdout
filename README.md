@@ -129,8 +129,8 @@ checked nothing.
 
 | | |
 |---|---|
-| [`voice-agent-eval-harness`](https://github.com/hmbseaotter/voice-agent-eval-harness) | the transcript format and the adapter these transcripts are parsed by; the conventions `tests/test_holdout_conventions.py` ports; and `HELDOUT_SET`, which names this set's call identifiers over there because nothing over there can discover them |
-| [`comparative-judgment`](https://github.com/hmbseaotter/comparative-judgment) | nothing directly. It scores the *design* set's findings, and this repository has no findings yet |
+| [`voice-agent-eval-harness`](https://github.com/hmbseaotter/voice-agent-eval-harness) | the transcript format and the adapter these transcripts are parsed by; the conventions `tests/test_holdout_conventions.py` ports, and the patterns and constants those ports are compared with; `HELDOUT_SET`, which names this set's call identifiers over there because nothing over there can discover them; the tag `rubric-frozen-v1`, without which every phase-5 tool refuses to run; `harness.core.findings`, the gold-set schema its labels are written in; the frozen commit's own `_DEFAULT_TEMPLATE` and `harness.judge.prompt.load_template`, which the gate runs from a `git archive` of that commit; `corpus/findings.yaml` and `corpus/DESIGN_SET`; and the two specifications and the entity register the authoring packet and the review folder redact |
+| [`comparative-judgment`](https://github.com/hmbseaotter/comparative-judgment) | nothing today: it scores the *design* set's findings. Held-out severity bands are to be placed in a separate store of its own, kept outside both trees (harness O-10), and the sealed export of that store has no slot in this chain yet (`PHASE-5-LABELS.md` §11) |
 
 Every one of those is a dependency **this repository's own suite cannot check**. That is what
 `HOLDOUT-OBLIGATIONS.md` in the harness is for: a convention can change there and leave this set out

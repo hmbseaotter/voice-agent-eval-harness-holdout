@@ -28,6 +28,21 @@ themselves -- is held by nothing, and can fall behind the harness without failin
 The fix, if anyone wants it, is for the rules to move into the `harness` package
 so both repositories import one implementation.
 
+**What is not ported, as of the cross-project audit of 2026-09-15.** Thirteen rules the harness
+enforces on its own corpus have no equivalent here, so this set is held to none of them: the
+adjacent-domain and own-shapes checks; the five privacy rules (the reserved email domain, the
+reserved telephone range, a ZIP below the lowest assigned, no street address, no payment card
+number); the four lifecycle rules (header duration against the event log, timestamps never running
+backwards, every call opening and closing its lifecycle, the recording disclosure); the
+record-contradiction check and its reach; the wrapped-event rule; a retrieved POLICY quote against
+the clause it cites; no internal field reaching the caller; action reason codes naming an action
+the call attempted; the calling number and the booking reference; the declared platform,
+production and venue; the findings-density ceiling, which is a labels-side rule for after the
+reveal; and the corpus median speech rate, of which only the per-utterance band is ported below.
+They live in the harness's `tests/test_corpus_hygiene.py` and `tests/test_speech_plausibility.py`.
+Porting one means reading these transcripts, so which to port is the owner's call, and this
+paragraph is the record that the gap is known rather than missed.
+
 **The harness is a separate repository, and most checks here need it** -- for the
 parser, `corpus/policies/`, the entity register, or the originals the copies are
 compared with. When it is absent those tests skip with a message naming what did

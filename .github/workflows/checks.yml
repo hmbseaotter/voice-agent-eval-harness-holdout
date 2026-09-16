@@ -290,9 +290,10 @@ jobs:
         # difference between a promise and a check.
         if: hashFiles('.harness/pyproject.toml') == ''
         run: |
-          echo "::error::the harness repository was not checked out, so the parse check, the"
-          echo "::error::provenance check and the clause-count check did not run. This job"
-          echo "::error::has verified nothing about transcript contents. Most likely"
-          echo "::error::HARNESS_READ_TOKEN is missing or expired -- it needs Contents: read"
-          echo "::error::on hmbseaotter/voice-agent-eval-harness."
+          echo "::error::the harness repository was not checked out, so every step conditional"
+          echo "::error::on .harness/pyproject.toml was skipped: the parse check, the ported"
+          echo "::error::conventions, the persona and name declarations, the phase-5 label gate,"
+          echo "::error::and the lint, format and type checks. This job has verified nothing"
+          echo "::error::about transcript contents. Most likely HARNESS_READ_TOKEN is missing or"
+          echo "::error::expired -- it needs Contents: read on hmbseaotter/voice-agent-eval-harness."
           exit 1
