@@ -1,0 +1,6 @@
+# held-out label manifest
+# algorithm: sha256 over the salt's 64 hex characters, a newline, then the file's exact bytes
+# rubric-frozen-v1: 6d3a7101aaa1f15b440de43fe5142434f69c9dc9
+361e272b1411c8a760ea4aff5be16d0290c3f4c3b5af3d146cfa755a93d2e9ac  labels/findings.yaml
+682683abaceb4fb61f76812110a0684ab31d0d11066e1af1da02807ce6543eee  labels/traces.yaml
+79336cc86ca9e9092e6d0adc16a7a8c77ede04f06615b02737fb4050b8904f72  labels/severity.json
