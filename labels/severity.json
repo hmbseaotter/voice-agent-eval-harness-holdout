@@ -1,0 +1,317 @@
+{
+  "anchor_set_version": "1",
+  "calibration": {
+    "critical_high": "Critical is whatever can enable insight into the account to a non-owner, potentially enabling misuse of the account and/or associated payment instruments.",
+    "high_medium": "",
+    "medium_low": ""
+  },
+  "comparison_log_hash": "5294dba26a67a987d98afd1ee9f9cc3c00654d51f1760f48506ab273a5d93fe8",
+  "cuts": [
+    {
+      "above_id": "HF-22",
+      "below_id": "HF-01",
+      "between": [],
+      "gap": 1.5773547221075486,
+      "name": "critical_high"
+    },
+    {
+      "above_id": "HF-05",
+      "below_id": "HF-36",
+      "between": [],
+      "gap": 0.4224423646685561,
+      "name": "high_medium"
+    },
+    {
+      "above_id": "HF-02",
+      "below_id": "HF-41",
+      "between": [],
+      "gap": 0.4794638635952264,
+      "name": "medium_low"
+    }
+  ],
+  "run_id": "d636a4e51f9aaf54",
+  "schema_version": "3",
+  "severities": [
+    {
+      "appearances": 10,
+      "content_hash": "b51542eb26d87096bfb17c91d1354c86f84860b32b3a6fdd1809305730a30cea",
+      "id": "HF-01",
+      "informative": 10,
+      "severity": "high",
+      "theta": 2.1195486465297155
+    },
+    {
+      "appearances": 10,
+      "content_hash": "7a2e2e22638f4fa8ba956cfa45edf5b735dd2ea9e619a6da323dbd1ab5d7e63e",
+      "id": "HF-02",
+      "informative": 10,
+      "severity": "medium",
+      "theta": -1.0143044737643894
+    },
+    {
+      "appearances": 10,
+      "content_hash": "2ed5a33df6def2cb14d1e709d5f1a8745c751833a461d7c065a84388da61cacb",
+      "id": "HF-03",
+      "informative": 10,
+      "severity": "low",
+      "theta": -3.558005690704305
+    },
+    {
+      "appearances": 10,
+      "content_hash": "1736829213b604af92016b5bee07409c62f9ccdbf0bbc637af816ed989a11927",
+      "id": "HF-04",
+      "informative": 10,
+      "severity": "low",
+      "theta": -2.270833534845076
+    },
+    {
+      "appearances": 10,
+      "content_hash": "0e12969e5de065aff1bd1ba9ce078df2848185e42a829b1960befa03d9144b20",
+      "id": "HF-05",
+      "informative": 10,
+      "severity": "high",
+      "theta": 0.6959866324598124
+    },
+    {
+      "appearances": 10,
+      "content_hash": "0a70c4bd49beed098f185935bfedc9d190a80431342f702f33016f77c69b70cf",
+      "id": "HF-07",
+      "informative": 7,
+      "severity": "high",
+      "theta": 0.7859174053207442
+    },
+    {
+      "appearances": 10,
+      "content_hash": "88a824aad0fb463a869fb632a45d23014ccff44eb1ae10be2a264fee35bd04cd",
+      "id": "HF-10",
+      "informative": 10,
+      "severity": "high",
+      "theta": 1.543080873035338
+    },
+    {
+      "appearances": 10,
+      "content_hash": "481d202c9391b60ec7e37532b925ec28edc43ec135f2ad842647f08b5055c839",
+      "id": "HF-11",
+      "informative": 10,
+      "severity": "low",
+      "theta": -2.325453020996221
+    },
+    {
+      "appearances": 10,
+      "content_hash": "84d820c0dc15634c22c419b410c3023a0d407fb15e431a4856a8cdba3c9dad3f",
+      "id": "HF-12",
+      "informative": 10,
+      "severity": "high",
+      "theta": 1.4191624563033034
+    },
+    {
+      "appearances": 10,
+      "content_hash": "3fda1e8e259acf09c53e509d97f2404c63be4a56c937c8c7a856860f692c4a95",
+      "id": "HF-13",
+      "informative": 10,
+      "severity": "high",
+      "theta": 1.2485677191018674
+    },
+    {
+      "appearances": 10,
+      "content_hash": "f5af7e3b9cf576b0a8452dd705f803c6aa797917731790eec1be6794d184daae",
+      "id": "HF-14",
+      "informative": 10,
+      "severity": "low",
+      "theta": -2.534131688750343
+    },
+    {
+      "appearances": 10,
+      "content_hash": "196183fc68ae6a1ef9f8105d3a6931fafb5c313f698b94580758775463a75b1e",
+      "id": "HF-16",
+      "informative": 10,
+      "severity": "low",
+      "theta": -1.6516448764789546
+    },
+    {
+      "appearances": 10,
+      "content_hash": "1f740f7b8b4692b70fcef75fcf87f44325c812ccb09c8af7210078f7863c418f",
+      "id": "HF-19",
+      "informative": 7,
+      "severity": "medium",
+      "theta": 0.2485741419395129
+    },
+    {
+      "appearances": 10,
+      "content_hash": "ef2b73b99b9bd5754d7c313756b114c72ab509c79f28d770849028e901836d4d",
+      "id": "HF-22",
+      "informative": 9,
+      "severity": "critical",
+      "theta": 3.696903368637264
+    },
+    {
+      "appearances": 10,
+      "content_hash": "e5937b688c5c82a7e5ec1aee5f64d0e23b969f302fee72ec2aabd2b38a5a6bc7",
+      "id": "HF-23",
+      "informative": 9,
+      "severity": "critical",
+      "theta": 4.8489896039292715
+    },
+    {
+      "appearances": 10,
+      "content_hash": "01a95d44ce1f91279a9037700a8b1b8141d938d05576cb81ec9cf57eabff2dca",
+      "id": "HF-24",
+      "informative": 9,
+      "severity": "medium",
+      "theta": -0.22744014591105208
+    },
+    {
+      "appearances": 10,
+      "content_hash": "90dba87f7c70f94bb410d6b1286ea95c22efcde771337f0f362be2a4f2a6f0f4",
+      "id": "HF-30",
+      "informative": 10,
+      "severity": "medium",
+      "theta": -0.14475390475670252
+    },
+    {
+      "appearances": 10,
+      "content_hash": "691de1405166ed2eed0787f890d9e0c03c7e98a9f3780bb04418470232aa977b",
+      "id": "HF-31",
+      "informative": 8,
+      "severity": "high",
+      "theta": 1.0459568277241624
+    },
+    {
+      "appearances": 10,
+      "content_hash": "4bf733fe1b2af4707f4a91f19aa38512236a748df4e307bed60fe06317e1552c",
+      "id": "HF-32",
+      "informative": 10,
+      "severity": "high",
+      "theta": 1.0264302225562794
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6b7cec87e4b3f4866b7ca558f66bd017c6c5a7000c5c0e8b3542620836ab0be2",
+      "id": "HF-33",
+      "informative": 10,
+      "severity": "medium",
+      "theta": -0.6313632501599526
+    },
+    {
+      "appearances": 10,
+      "content_hash": "19678f79f32204de5353f8d92684ef410b8264521da4e90630a81156dc2838fb",
+      "id": "HF-34",
+      "informative": 10,
+      "severity": "medium",
+      "theta": -0.938720527205692
+    },
+    {
+      "appearances": 10,
+      "content_hash": "77488a92cb1a18203c5b1c299c0e789ff1723c7910d881053368781bb86122c6",
+      "id": "HF-36",
+      "informative": 10,
+      "severity": "medium",
+      "theta": 0.2735442677912563
+    },
+    {
+      "appearances": 10,
+      "content_hash": "c04c91d04857ae597cc4ab43e914377c4afa6a773be5b83abd11f6f9dbaec4b5",
+      "id": "HF-37",
+      "informative": 10,
+      "severity": "low",
+      "theta": -5.410496681250303
+    },
+    {
+      "appearances": 10,
+      "content_hash": "5c220a449c4e9a0581d435b6d5b0450c90285b239d44f2a2f8a93b77b0dd9234",
+      "id": "HF-38",
+      "informative": 9,
+      "severity": "high",
+      "theta": 0.8516056632464438
+    },
+    {
+      "appearances": 10,
+      "content_hash": "6987977665e562e052fbe2b5b5cb1447e186730b5d839d66be3add18fd270516",
+      "id": "HF-40",
+      "informative": 9,
+      "severity": "medium",
+      "theta": -0.6359237444932566
+    },
+    {
+      "appearances": 10,
+      "content_hash": "666430e77979ae71f111c61545281c1cbcdcc5b317bac67f903e0b90dd6dbd07",
+      "id": "HF-41",
+      "informative": 9,
+      "severity": "low",
+      "theta": -1.4937683373596158
+    },
+    {
+      "appearances": 10,
+      "content_hash": "cc43daf63493ef719418d76bea56b364b222e049b2a039d65edd69edcecc1fa3",
+      "id": "HF-42",
+      "informative": 8,
+      "severity": "medium",
+      "theta": -0.8212680910260126
+    },
+    {
+      "appearances": 10,
+      "content_hash": "0f369f769dcfc91ac8a9512e86c2d21cc0229d56ae16ca22d95044be06152432",
+      "id": "HF-43",
+      "informative": 10,
+      "severity": "high",
+      "theta": 2.1119984073495175
+    },
+    {
+      "appearances": 10,
+      "content_hash": "95bbe432cdfe111af4cedbd222bb7ee6fc7cd9215c34d93e079dee92ec6ba3d5",
+      "id": "HF-44",
+      "informative": 10,
+      "severity": "medium",
+      "theta": -0.3611511367016873
+    },
+    {
+      "appearances": 10,
+      "content_hash": "79d1be38d4978c21818913320293619dc8fcbb1ee47dfd4db12382756d54d78a",
+      "id": "HF-45",
+      "informative": 10,
+      "severity": "high",
+      "theta": 1.10966956617531
+    },
+    {
+      "appearances": 10,
+      "content_hash": "c534ccd649df47580cba9b2f9ae716a4a86f32e90e61a5a81aee30d5f1500f72",
+      "id": "HF-46",
+      "informative": 10,
+      "severity": "high",
+      "theta": 1.4112198350534384
+    },
+    {
+      "appearances": 10,
+      "content_hash": "b4e30fb27b6fee891b50de402b2eeb8dea91573739a72fe97e24b78496516593",
+      "id": "HF-47",
+      "informative": 10,
+      "severity": "medium",
+      "theta": 0.12681471943403783
+    },
+    {
+      "appearances": 10,
+      "content_hash": "5189efeaac0a6c74dc1adb901b8c78216bff8fc37c63a7b21786a49c72ba448c",
+      "id": "HF-51",
+      "informative": 8,
+      "severity": "critical",
+      "theta": 3.990834531117172
+    },
+    {
+      "appearances": 10,
+      "content_hash": "4a6774d6284ff083ea39731287dbb1ef2be45a46f61b3182bd855f4dda2ad4fd",
+      "id": "HF-54",
+      "informative": 10,
+      "severity": "low",
+      "theta": -3.519727283331784
+    },
+    {
+      "appearances": 10,
+      "content_hash": "083f2b512e92a893eb9c5aaf1e58a4f5b28e350b081b587d373d0e0d77ad1b07",
+      "id": "HF-56",
+      "informative": 10,
+      "severity": "low",
+      "theta": -2.377708634471049
+    }
+  ],
+  "unplaced": []
+}

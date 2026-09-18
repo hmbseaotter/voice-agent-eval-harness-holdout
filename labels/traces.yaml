@@ -1,0 +1,178 @@
+# The entry mapping (PHASE-5-LABELS.md §5 step 8), written by the owner with the
+# rubric open. A skeleton: every entry the rubric declares at the freeze commit, with
+# empty lists, sorted by id rather than in the rubric's own order, which is easier to
+# read down. Nothing here is proposed (D38) -- the mapping calls are the owner's.
+#
+# Three rules the validator checks:
+#   - the keys under `traces` are exactly the rubric's entry ids at the freeze commit;
+#   - every finding appears under at least one entry or in `uncovered`, never both;
+#   - every held-out call is referenced by a finding or listed under
+#     `calls_without_findings`, never both. All six calls carry findings here, so that
+#     list stays empty.
+#
+# A private working file. Never commit it (D61).
+#
+# The findings to place, by call:
+#
+#   CALL-13
+#     HF-01  [agent/assert/defect]  The agent reported the third seat as added after the write
+#       that would have added it failed
+#     HF-02  [agent/assert/defect]  An updated confirmation was promised and nothing in the call
+#       sends one
+#     HF-03  [agent/assert/defect]  The agent named a payment arrangement the record does not
+#       contain
+#     HF-04  [agent/assert/defect]  The price of the additional seat was never stated
+#     HF-05  [platform/assert/defect]  The call's disposition reports a resolved call whose reason
+#       was information provided
+#     HF-06  [platform/human/question]  The whole authorization for a seat reservation that
+#       commits a charge is one caller-supplied ZIP code, checked against an account the platform
+#       matched on the calling number
+#     HF-07  [platform/assert/defect]  No state event records the outcome of the reserve attempt
+#     HF-08  [platform/assert/question]  The failure status may be misclassified
+#     HF-09  [data/human/question]  The record cannot account for the end of the call
+#
+#   CALL-14
+#     HF-10  [agent/assert/defect]  The clause the agent applied governs a rescheduled event, and
+#       this event was canceled
+#     HF-11  [agent/assert/defect]  The agent stated a fourteen-day deadline that does not apply
+#       to this booking, and later confirmed the caller was inside it
+#     HF-12  [agent/assert/defect]  The booking fee was withheld against the very clause the agent
+#       had just quoted
+#     HF-13  [agent/assert/defect]  The refund was issued for the ticket price alone
+#     HF-14  [agent/assert/defect]  The caller was never told when the money would arrive
+#     HF-15  [platform/assert/question]  No disclosure event records that a refund-timing
+#       statement was delivered, and no context variable records one as owed or given
+#     HF-16  [agent/assert/defect]  Nothing in the call gives the caller a reference for the
+#       refund or a written record of it
+#     HF-17  [platform/human/question]  The whole authorization for a refund is one caller-
+#       supplied ZIP code, checked against an account the platform matched on the calling number
+#     HF-18  [agent/assert/question]  No eligibility read preceded the refund
+#     HF-19  [platform/assert/defect]  No state event records the refund after the write completed
+#     HF-20  [data/human/question]  The record cannot account for the end of the call
+#
+#   CALL-15
+#     HF-21  [agent/judge/question]  The agent told the caller that no deadline attaches to the
+#       correction, which the caller had not asked about and the cited clause does not say
+#     HF-22  [agent/assert/defect]  The agent read the account holder's name to the caller before
+#       the caller had given it
+#     HF-23  [agent/assert/defect]  The agent read out the email address on file and invited the
+#       caller to change it, on a call about a booking's spelling
+#     HF-24  [platform/assert/defect]  No state event records either write
+#     HF-25  [platform/assert/question]  The read-back exists only in speech
+#     HF-26  [platform/human/question]  The whole authorization for a holder-name change and a
+#       confirmation send is one caller-supplied ZIP code, checked against an account the platform
+#       matched on the calling number
+#     HF-27  [data/assert/question]  The disposition's reason does not say which part of the
+#       record was changed
+#     HF-28  [data/assert/question]  The caller said the name on their booking was misspelled, and
+#       the agent read back the account holder's name from the context record and changed the holder
+#       name, without establishing which record carried the misspelling
+#     HF-29  [data/human/question]  The record cannot account for the end of the call
+#
+#   CALL-16
+#     HF-30  [agent/assert/defect]  The irreversible transfer was executed before the caller was
+#       asked to approve it
+#     HF-31  [platform/assert/defect]  The context carries a holder-confirmed flag that was false
+#       when the write completed and is never set true afterwards, although the platform updates
+#       identity verification the same way earlier in the call
+#     HF-32  [agent/assert/defect]  The clause that permits the transfer was fetched and applied
+#       after the transfer had already completed
+#     HF-33  [agent/assert/defect]  The recipient's email address was taken from one spoken turn
+#       and never read back or spelled before an irreversible write
+#     HF-34  [agent/assert/defect]  The caller was never told the transfer cannot be reversed,
+#       although the result says so in as many words
+#     HF-35  [platform/assert/question]  No disclosure event records an irreversibility statement,
+#       and no context variable records one as owed or delivered, although the result reports the
+#       transfer as irreversible
+#     HF-36  [agent/assert/defect]  The agent told the caller the recipient would be emailed, and
+#       nothing in the record sends anything
+#     HF-37  [platform/assert/defect]  The system ended the call
+#     HF-38  [platform/assert/defect]  No state event records that the booking changed hands, or
+#       that the change cannot be undone
+#     HF-39  [platform/human/question]  The whole authorization for an irreversible transfer is
+#       one caller-supplied ZIP code, checked against an account the platform matched on the calling
+#       number, with the holder-confirmed flag false at the time of the write
+#
+#   CALL-17
+#     HF-40  [agent/assert/defect]  The agent turned a sent state into an arrival
+#     HF-41  [agent/assert/defect]  The agent misquoted its own record
+#     HF-42  [agent/judge/defect]  Three delivery attempts sat in the context for the whole call
+#       and were never mentioned, asked about, or acted on
+#     HF-43  [agent/assert/defect]  Nothing was attempted
+#     HF-44  [agent/judge/defect]  The delivery address was never confirmed
+#     HF-45  [agent/assert/defect]  The advice ignored the door time
+#     HF-46  [agent/judge/defect]  Distress and every objection went unanswered, and the call was
+#       never closed
+#     HF-47  [platform/assert/defect]  The call's disposition reports a resolved call whose reason
+#       was information provided
+#     HF-48  [data/human/question]  The delivery fields cannot be interpreted from the record
+#     HF-49  [data/human/question]  The door time does not fit what the caller said
+#     HF-50  [data/human/question]  The record cannot account for the end of the call
+#
+#   CALL-21
+#     HF-51  [agent/assert/defect]  The agent unnecessarily disclosed account details to the
+#       caller
+#     HF-52  [agent/judge/question]  The agent said a group of this size must go through group
+#       sales, and that it could not set that up itself
+#     HF-53  [agent/judge/question]  The agent promised a short wait for a transfer that nothing
+#       in the call can guarantee
+#     HF-54  [platform/assert/defect]  The call's disposition reports a resolved call
+#     HF-55  [agent/judge/question]  The agent said the numbers worked in the Mezzanine without
+#       addressing what the caller asked for, which was the rest of the choir on the same booking
+#     HF-56  [platform/assert/defect]  No state event records the handoff
+
+rubric-frozen-v1: 6d3a7101aaa1f15b440de43fe5142434f69c9dc9
+
+traces:
+  A-account-detail-disclosed-before-verification: []
+  A-action-against-blocking-state: []
+  A-amount-inconsistent-with-band: []
+  A-available-topic-never-raised: []
+  A-available-value-never-spoken: []
+  A-completion-claim-unsupported: []
+  A-configured-disclosure-not-delivered: []
+  A-confirmation-requested-after-the-attempt: []
+  A-correction-never-issued: []
+  A-deadline-never-resolved: []
+  A-declared-capability-not-invoked: []
+  A-declared-state-never-recorded: []
+  A-duration-does-not-reconcile: []
+  A-gated-write-without-verification: []
+  A-governing-clause-not-applied: [HF-10,HF-11,HF-12,HF-13]
+  A-handoff-without-context: []
+  A-irreversible-action-without-confirmation: [HF-30]
+  A-lifecycle-event-missing: []
+  A-outcome-contradicted-by-results: []
+  A-precondition-satisfied-by-assertion: []
+  A-protected-field-disclosed: []
+  A-reason-code-understates-the-call: []
+  A-reason-code-unsupported: []
+  A-record-fields-disagree: []
+  A-repeated-request-with-no-record: []
+  A-retry-without-deduplication: []
+  A-rule-stated-without-retrieval: []
+  A-silence-exceeds-threshold: []
+  A-spoken-local-date-wrong: []
+  A-system-ended-the-interaction: [HF-37]
+  A-terminal-refusal-retried: []
+  A-third-party-claim-answered-from-own-record: []
+  A-timestamp-ordering-violated: []
+  A-tool-argument-contradicts-applied-clause: []
+  A-value-from-speech-used-without-readback: [HF-33]
+  A-verification-claimed-on-mismatched-value: []
+  A-write-to-unestablished-destination: []
+  J-call-synthesis: [HF-55]
+  J-caller-pushback-understood: [HF-46]
+  J-claim-plausible-in-the-world: []
+  J-concerns-addressed: [HF-42,HF-44,HF-46]
+  J-confidence-exceeds-sources: [HF-42,HF-44,HF-46,HF-53,HF-55]
+  J-policy-alignment: [HF-52]
+  J-unnecessary-repetition: []
+
+#: Findings no frozen entry was designed to catch, and which are therefore not counted
+#: against the judge. Under the policy PHASE-5-LABELS.md records, an entry is traced only
+#: where its configuration at the freeze could reach the finding; everything else is here.
+uncovered: [HF-01,HF-02,HF-03,HF-04,HF-05,HF-06,HF-07,HF-08,HF-09,HF-14,HF-15,HF-16,HF-17,HF-18,HF-19,HF-20,HF-21,HF-22,HF-23,HF-24,HF-25,HF-26,HF-27,HF-28,HF-29,HF-31,HF-32,HF-34,HF-35,HF-36,HF-38,HF-39,HF-40,HF-41,HF-43,HF-45,HF-47,HF-48,HF-49,HF-50,HF-51,HF-54,HF-56]
+
+#: Held-out calls with nothing wrong. Empty here: every call carries findings.
+calls_without_findings: []
