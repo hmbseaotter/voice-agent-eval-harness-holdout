@@ -271,8 +271,8 @@ def reveal(
         f"{in_force[:12]}. {summary}"
     )
     print(
-        f"next: commit only these three files, with the trailer '{JUDGED_RUN}: {judged}', and "
-        "push (§6 step 6)"
+        "next: commit every file just revealed, together in one commit and with nothing else, "
+        f"with the trailer '{JUDGED_RUN}: {judged}', and push (§6 step 6)"
     )
     return 0
 

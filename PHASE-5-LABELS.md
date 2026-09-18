@@ -78,7 +78,7 @@ C2 and C3 live in **one** repository, their order is also **git ancestry**.
 | Property | Secured by |
 |---|---|
 | (a) rubric not designed against the labels | C1 cites F, and C1's committer date is later than F's (corroboration) |
-| (b) labels not tuned after judge output | C2's header cites C1; C1 is an ancestor of C2, and C2 of C3; both label files at C3 recompute to C1's manifest |
+| (b) labels not tuned after judge output | C2's header cites C1; C1 is an ancestor of C2, and C2 of C3; all three sealed files at C3 recompute to C1's manifest |
 | the run judged under the entry text the labels were written against | C2's header carries `rubric_hash`, `rubric.yaml` at F hashed as text (harness D183) |
 | P5 "first commit later than the tag" | C1 is the labels' first appearance in any form, and it cites F |
 | D26 | C2's header names C1, which resolves in this repository by construction |

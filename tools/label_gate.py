@@ -530,7 +530,7 @@ def _gate(
     missing = [path for path in PLAINTEXT if path not in paths]
     if missing:
         problems.append(
-            f"{', '.join(missing)}: missing; the reveal publishes both label files and the salt"
+            f"{', '.join(missing)}: missing; the reveal publishes every sealed file and the salt"
         )
     reveals = {commit for path in revealed for commit in added[path]}
     if len(reveals) != 1 or any(len(added[path]) != 1 for path in revealed):
