@@ -32,6 +32,17 @@ WHY IT REFUSES BEFORE THE FREEZE, AND WILL NOT OVERWRITE
 -------------------------------------------------------
 The reviewer's notes are a first draft of held-out labels, which do not exist
 until after `rubric-frozen-v1` (D21), and they are written inside this folder.
+
+WHY THE POLICY DOCUMENTS ARE IN IT
+----------------------------------
+They are what the calls retrieve. A `POLICY` event quotes one clause, and whether
+that clause was the one that governed is a question only the rest of the document
+answers. Both sets read the same documents and nothing in them describes a call,
+so they carry nothing a reviewer must not see, and the leak scan runs over them
+like everything else here. They are copied unedited, never through `redact`,
+because a quote is checked against its clause word for word. The first folder
+went out without them, and its reviewer could only infer that a governing clause
+existed where it should have been able to cite it.
 """
 
 from __future__ import annotations
@@ -100,6 +111,7 @@ def _brief(freeze_sha: str) -> str:
         "specs/transcript-format.md    how a transcript file is written",
         "specs/event-model.md          what each kind of event means; passages removed",
         "reference/entity-canon.md     names, tools and vocabularies used; passages removed",
+        "policies/                     the policy documents the calls retrieve, unedited",
         "```",
         "",
         "Where a passage was removed, a visible marker says so. The removed passages described",
@@ -230,10 +242,20 @@ def build(*, harness: Path, out: Path, transcripts: Path = TRANSCRIPTS) -> int:
     if not calls:
         print(f"error: no transcripts under {transcripts}", file=sys.stderr)
         return 1
+    policies = sorted((harness / "corpus" / "policies").glob("*.md"))
+    if not policies:
+        print(
+            f"error: {harness} holds no policy documents under corpus/policies. The calls cite "
+            "them, and a reviewer without them can only infer that a clause governed rather than "
+            "check it, so this refuses.",
+            file=sys.stderr,
+        )
+        return 2
 
     (out / "specs").mkdir(parents=True)
     (out / "reference").mkdir()
     (out / "transcripts").mkdir()
+    (out / "policies").mkdir()
     shutil.copy2(harness / "specs" / "transcript-format.md", out / "specs" / "transcript-format.md")
     for source, dest in (
         (harness / "specs" / "event-model.md", out / "specs" / "event-model.md"),
@@ -242,6 +264,9 @@ def build(*, harness: Path, out: Path, transcripts: Path = TRANSCRIPTS) -> int:
         dest.write_text(redact(source.read_text(encoding="utf-8")), encoding="utf-8", newline="\n")
     for path in sorted(transcripts.glob("CALL-*.txt")):
         shutil.copy2(path, out / "transcripts" / path.name)
+    for path in policies:
+        # Unedited: a POLICY event's quote is compared with its clause word for word.
+        shutil.copy2(path, out / "policies" / path.name)
     (out / "BRIEF.md").write_text(_brief(sha), encoding="utf-8", newline="\n")
     (out / "notes-reviewer.md").write_text(
         render_notes(calls, freeze_sha=sha, reader="reviewer"), encoding="utf-8", newline="\n"

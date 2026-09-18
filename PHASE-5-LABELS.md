@@ -194,8 +194,13 @@ makes its content guessable.
 2. **Owner review.** The owner fills in `notes-owner.md` for all six calls.
 3. **Independent review.** `tools/build_review_folder.py` builds a **review folder**, by default
    `~/holdout-review`. It holds the transcripts, the format specification, the event model and the
-   entity canon (both redacted as for the authoring packet, with the same leak scan), a reviewer's copy
-   of the worksheet, and `BRIEF.md`. It holds no rubric, no design findings and no seeding manifest.
+   entity canon (both redacted as for the authoring packet, with the same leak scan), the policy
+   documents the calls retrieve, a reviewer's copy of the worksheet, and `BRIEF.md`. It holds no
+   rubric, no design findings and no seeding manifest.
+   - **The policies are copied unedited**, never redacted: a `POLICY` event's quote is checked against
+     its clause word for word, and whether that clause was the one that governed only the rest of the
+     document can say. The leak scan covers them like everything else. The first folder went out
+     without them, and its reviewer had to infer a governing clause it could not cite.
    - **Where it may be built.** Never inside this repository or the harness checkout, whatever their
      ignore rules say. And never where a git repository would track what the reviewer writes: the
      destination must be outside every repository, or ignored by the one that encloses it. On the

@@ -2,8 +2,10 @@
 
 Its refusals are exercised rather than trusted: nothing before `rubric-frozen-v1`
 resolves, nothing inside this repository or the harness checkout, nothing where a
-git repository would track the notes, nothing over an existing folder, and a
-folder carrying a design-set identifier is deleted rather than kept.
+git repository would track the notes, nothing over an existing folder, nothing
+from a harness without policy documents, and a folder carrying a design-set
+identifier is deleted rather than kept -- including one whose unedited policy
+documents carry it.
 
 **Every test that builds into a temporary directory sets `GIT_CEILING_DIRECTORIES`
 to it.** A temporary directory can sit inside a repository the machine happens to
@@ -81,8 +83,19 @@ def _git(root: Path, *args: str) -> None:
     )
 
 
-def _stand_in_harness(root: Path, *, tagged: bool, register_suffix: str = "") -> Path:
-    """A git repository holding copies of the harness documents; tagged only if asked."""
+def _stand_in_harness(
+    root: Path,
+    *,
+    tagged: bool,
+    register_suffix: str = "",
+    policies: bool = True,
+    policy_suffix: str = "",
+) -> Path:
+    """A git repository holding copies of the harness documents; tagged only if asked.
+
+    The policy documents are copied as a directory, every one the harness holds, so a
+    policy the harness adds is one this stand-in carries without a change here.
+    """
     assert HARNESS is not None
     for relative in _COPIED:
         (root / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -92,6 +105,13 @@ def _stand_in_harness(root: Path, *, tagged: bool, register_suffix: str = "") ->
         register.write_text(
             register.read_text(encoding="utf-8") + register_suffix, encoding="utf-8"
         )
+    if policies:
+        (root / "corpus" / "policies").mkdir(parents=True, exist_ok=True)
+        for path in sorted((HARNESS / "corpus" / "policies").glob("*.md")):
+            shutil.copy2(path, root / "corpus" / "policies" / path.name)
+        if policy_suffix:
+            first = sorted((root / "corpus" / "policies").glob("*.md"))[0]
+            first.write_text(first.read_text(encoding="utf-8") + policy_suffix, encoding="utf-8")
     _git(root, "init", "-q")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "stand-in")
@@ -187,8 +207,35 @@ def test_a_folder_naming_a_design_call_is_deleted(bounded: Path) -> None:
 
 
 @requires_harness
+def test_a_policy_naming_a_design_call_gets_the_folder_deleted(bounded: Path) -> None:
+    """The policies are copied unedited, so the leak scan is their one guard and must reach them."""
+    assert HARNESS is not None
+    planted = sorted(design_ids(HARNESS))[0]
+    tagged = _stand_in_harness(
+        bounded / "harness",
+        tagged=True,
+        policy_suffix=f"\n\nA note that mentions {planted}.\n",
+    )
+    out = bounded / "review"
+
+    assert review.build(harness=tagged, out=out) == 1
+    assert not out.exists(), "a folder whose policies name a design call was left on disk"
+
+
+@requires_harness
+def test_the_folder_refuses_a_harness_with_no_policy_documents(bounded: Path) -> None:
+    """Without them a reviewer can only infer that a clause governed, so nothing is built."""
+    tagged = _stand_in_harness(bounded / "harness", tagged=True, policies=False)
+    out = bounded / "review"
+
+    assert review.build(harness=tagged, out=out) == 2
+    assert not out.exists()
+
+
+@requires_harness
 def test_a_clean_folder_holds_exactly_what_the_brief_describes(bounded: Path) -> None:
-    """The brief, the reviewer's worksheet, three redacted or copied documents, the transcripts.
+    """The brief, the reviewer's worksheet, three redacted or copied documents, the policy
+    documents unedited, and the transcripts.
 
     Shape only: file names, the freeze commit in two headers, and a count of design-set
     identifiers, which must be zero. Nothing a transcript says is asserted or printed.
@@ -204,6 +251,8 @@ def test_a_clean_folder_holds_exactly_what_the_brief_describes(bounded: Path) ->
             path.relative_to(out).as_posix() for path in out.rglob("*") if path.is_file()
         )
         transcripts = [f"transcripts/{path.name}" for path in (REPO_ROOT / "transcripts").glob("*")]
+        sources = sorted((tagged / "corpus" / "policies").glob("*.md"))
+        assert sources, "the stand-in carries no policy documents, so this proves nothing"
         assert files == sorted(
             [
                 "BRIEF.md",
@@ -211,9 +260,13 @@ def test_a_clean_folder_holds_exactly_what_the_brief_describes(bounded: Path) ->
                 "reference/entity-canon.md",
                 "specs/event-model.md",
                 "specs/transcript-format.md",
+                *(f"policies/{path.name}" for path in sources),
                 *transcripts,
             ]
         )
+        for source in sources:
+            copied = (out / "policies" / source.name).read_bytes()
+            assert copied == source.read_bytes(), f"{source.name} was not copied unedited"
 
         leak_count = len(find_leaks(out, design_ids(tagged)))
         assert leak_count == 0, f"{leak_count} lines name a design-set call"
@@ -226,5 +279,6 @@ def test_a_clean_folder_holds_exactly_what_the_brief_describes(bounded: Path) ->
         brief = (out / "BRIEF.md").read_text(encoding="utf-8")
         assert "**Work only inside this folder.**" in brief
         assert f"`{sha}`" in brief
+        assert "policies/" in brief, "the brief does not list the policy documents it ships"
     finally:
         shutil.rmtree(out, ignore_errors=True)
