@@ -417,18 +417,44 @@ party by name. An entry configured that way has no subject in a corpus written i
 whatever those calls contain. The judged entries carry no such configuration and reach every call,
 which is the asymmetry this set was always going to expose.
 
-**What publishes at the reveal, and not before.** How many findings this set holds, how many the
-mapping traces and which, are facts about the labels (D61), so they publish with the plaintext at
-C3. The reach analysis they rest on is kept in `private/labels/entry-reach.md` until then, and the
-agreement measurement at §6 step 7 reports over what the mapping traces.
+**What the reveal published.** The chain ran on 2026-09-18: C1 `e8dcc27` sealed the manifest (CI
+run 35301917525, S1); C2 `49655ca` committed the harness's live run log unmodified (CI run
+35306332967, S2); C3 `19673ca` revealed the three label files and the salt (CI run 35306992756, S3).
+Until then these numbers were facts about the labels (D61); they are public now.
+
+- **56 findings over the six calls**: 9, 11, 9, 10, 11 and 6 on CALL-13, 14, 15, 16, 17 and 21.
+  Ruled 30 agent, 18 platform, 8 data; 43 assert, 7 judge, 6 human; 35 defect, 21 question.
+- **Where they came from**: 26 raised by both reviewers, 14 by the reviewer alone, and 16 by the
+  owner alone, two of those added by the owner's rulings during adjudication rather than from either
+  worksheet. Of the 63 drafts, seven — all the reviewer's — were rejected, each for naming as
+  undeclared a persona or a detail key that `PERSONAS` and `NAMES` declare on this side, which the
+  reviewer's folder did not include; eleven were accepted with the owner's edits. The ledger that
+  records each ruling stays private.
+- **The mapping traces 13 of the 56**, across nine entries — four assert, five judged — and leaves
+  **43 uncovered**. The four assert entries that can fire on these calls at all are
+  `A-system-ended-the-interaction`, `A-governing-clause-not-applied`,
+  `A-value-from-speech-used-without-readback` and `A-irreversible-action-without-confirmation`; two
+  more evaluate and stay silent, and the other thirty-one are configured for literal phrases, named
+  variables, tools or thresholds that none of these calls contains. The traced findings sit on
+  CALL-14, 16, 17 and 21. CALL-13 carries none, although it holds the failure this corpus is built
+  around — an agent announcing a completion over a write that failed — because
+  `A-completion-claim-unsupported` matches literal phrases and this agent's words are not among them.
+- **Severity**: the 35 defect-tier findings were placed in a `comparative-judgment` store of their
+  own, 175 comparisons with 9 ties in one connected component, and banded Critical 3, High 12,
+  Medium 11, Low 9, with every cut drawn between neighbors. The top cut's calibration note is the
+  design set's own sentence, verbatim, so the two sets' Critical bands rest on one definition.
+
+The entry-by-entry reach reading is kept with the private working files; the summary above is what it
+found.
 
 **One expectation recorded before the run, because a prediction made afterwards is worth less.**
 `A-irreversible-action-without-confirmation` is configured for `change_holder_name` with the confirm
 phrases "can you confirm that's right" and "before i change it". The transcripts are public, and
 CALL-15 event 15 reads *"That's a single character, so it stays a correction rather than a transfer
 — no deadline attached to it. Can I read it back? K, R-A-V-E-N-S-B-O-U-R-N."* — a confirmation in
-words the check does not know. The check is therefore expected to fire on that call. Whether that
-firing is a false alarm is a question only the labels answer, at the reveal.
+words the check does not know. The check is therefore expected to fire on that call. The labels now
+answer what the prediction left open: CALL-15 carries no traced finding, so a firing there is a false
+alarm.
 
 ---
 
