@@ -373,14 +373,19 @@ findings on 2026-09-12, 78 are traced by at least one rubric entry and 12 by non
 
 ## 11. Still open
 
-Found by the cross-project audit of 2026-09-15, which read both repositories at held-out `5760aa9` and
-harness `6a0f144`. Its other finding closed on 2026-09-16: the harness named the header key
-`rubric_hash`, and S2 compares it with `rubric.yaml` at F (§7, and §8 item 8).
+Nothing. The cross-project audit of 2026-09-15, which read both repositories at held-out `5760aa9` and
+harness `6a0f144`, left two items here, and both are closed:
 
-- **Conventions this set is held to by nothing.** The audit listed thirteen rules the harness enforces
-  on the design set with no equivalent here; `tests/test_holdout_conventions.py` records them. Whether
-  this set satisfies any of them needs the transcripts, so porting or recording the gap is the
-  owner's call.
+- **The rubric hash**, closed on 2026-09-16: the harness named the header key `rubric_hash`, and S2
+  compares it with `rubric.yaml` at F (§7, and §8 item 8).
+- **The conventions this set was held to by nothing**, closed on 2026-09-18. The harness's own tests
+  for the thirteen groups the audit listed were run against these transcripts, and every rule with
+  something here to check passed; the failures were guards sized for the design corpus. The five
+  privacy rules and the four lifecycle rules are now ported to `tests/test_holdout_conventions.py`,
+  whose docstring records the rest. The findings-density ceiling (D68, 0.35 findings per event) is
+  the one result with weight: four of six calls exceed it counting every finding, and CALL-17, at
+  0.400, counting defects alone — a measure of how much finer this set's labeling was than the
+  design set's, since 21 of its 56 findings are questions against the design set's 7 of 90.
 
 ## 12. Tools in this repository
 

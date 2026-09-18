@@ -28,20 +28,21 @@ themselves -- is held by nothing, and can fall behind the harness without failin
 The fix, if anyone wants it, is for the rules to move into the `harness` package
 so both repositories import one implementation.
 
-**What is not ported, as of the cross-project audit of 2026-09-15.** Thirteen rules the harness
-enforces on its own corpus have no equivalent here, so this set is held to none of them: the
-adjacent-domain and own-shapes checks; the five privacy rules (the reserved email domain, the
-reserved telephone range, a ZIP below the lowest assigned, no street address, no payment card
-number); the four lifecycle rules (header duration against the event log, timestamps never running
-backwards, every call opening and closing its lifecycle, the recording disclosure); the
-record-contradiction check and its reach; the wrapped-event rule; a retrieved POLICY quote against
-the clause it cites; no internal field reaching the caller; action reason codes naming an action
-the call attempted; the calling number and the booking reference; the declared platform,
-production and venue; the findings-density ceiling, which is a labels-side rule for after the
-reveal; and the corpus median speech rate, of which only the per-utterance band is ported below.
-They live in the harness's `tests/test_corpus_hygiene.py` and `tests/test_speech_plausibility.py`.
-Porting one means reading these transcripts, so which to port is the owner's call, and this
-paragraph is the record that the gap is known rather than missed.
+**What was not ported, and what running it showed.** The cross-project audit of 2026-09-15 listed
+thirteen groups of rules the harness enforces on its own corpus with no equivalent here. On
+2026-09-18, after the reveal, the harness's own tests were run against these transcripts from a
+throwaway copy with only the transcript directory repointed, and every rule with something here to
+check passed: the adjacent-domain and own-shapes checks, the five privacy rules, the four lifecycle
+rules, no record contradicting itself, the wrapped-event rule, all three POLICY quotes against the
+clause they cite, the four action reason codes, the calling number and the booking reference, the
+declared platform, production and venue, and the corpus median speech rate. The tests that failed
+were guards sized for the design corpus -- floors of six POLICY events and a hundred utterances,
+seeded exceptions naming design calls, and checks that refuse to pass vacuously on a shape this set
+does not contain: a do-not-disclose field, a wrapped assignment, an event-details fetch. The privacy
+and lifecycle rules are ported at the end of this file; the rest are recorded here rather than
+ported, because these transcripts cannot change without invalidating the sealed labels. The
+findings-density ceiling (D68, 0.35 findings per event) is a labels-side rule: four of the six
+calls exceed it counting every finding, and one, CALL-17 at 0.400, counting defects alone.
 
 **The harness is a separate repository, and most checks here need it** -- for the
 parser, `corpus/policies/`, the entity register, or the originals the copies are
@@ -62,6 +63,7 @@ import os
 import re
 import shutil
 import sys
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -1759,3 +1761,149 @@ def test_the_secret_documentation_guard_finds_an_undocumented_secret() -> None:
         "GITHUB_TOKEN is supplied by the runner, so demanding documentation for it would "
         "be a requirement nobody can meet"
     )
+
+
+# --------------------------------------------------------------------------
+# Privacy and lifecycle, ported after the reveal
+# --------------------------------------------------------------------------
+#
+# The harness's `tests/test_corpus_hygiene.py` holds its corpus to five privacy
+# rules and four lifecycle rules. On 2026-09-18 those tests, and the rest of the
+# unported list in the module docstring, were run against this set from a
+# throwaway copy with only the transcript directory repointed, and every rule with
+# something here to check passed. These nine are ported because a privacy lapse is
+# the one that would do real harm in a public repository, and because neither
+# group needs a floor sized for the design corpus.
+#
+# **No seeded exceptions.** The harness exempts the design calls it seeded with a
+# duration mismatch or a missing `call.ended`; this set has no seeding manifest, so
+# each rule here holds for every call. **The privacy scans read the labels too:**
+# `labels/findings.yaml` quotes the transcripts, and the harness widened its own
+# scan to its findings for the same reason.
+
+#: The published labels that quote transcript text. Absent before the reveal, and
+#: the privacy scans read whichever exist.
+_QUOTING_LABELS: Final[tuple[str, ...]] = ("labels/findings.yaml",)
+
+
+def _corpus_text() -> str:
+    """The transcripts, and the published labels that quote them."""
+    parts = [path.read_text(encoding="utf-8") for path in _transcripts()]
+    parts += [
+        (REPO_ROOT / relative).read_text(encoding="utf-8")
+        for relative in _QUOTING_LABELS
+        if (REPO_ROOT / relative).is_file()
+    ]
+    return "\n".join(parts)
+
+
+def test_every_email_address_is_in_the_reserved_domain() -> None:
+    """RFC 2606 reserves `example.com`, so no address here can ever be registered."""
+    found = set(re.findall(r"[\w.+-]+@[\w.-]+\.\w+", _corpus_text()))
+    assert found, "no email address found at all; the scan has drifted"
+    offenders = {e for e in found if not e.lower().endswith("@example.com")}
+    assert not offenders, f"email addresses outside the reserved domain: {sorted(offenders)}"
+
+
+def test_every_telephone_number_is_in_the_reserved_fictional_range() -> None:
+    """NANP reserves 555-0100 through 555-0199 for fictional use."""
+    found = set(re.findall(r"\+1 \(\d{3}\) (\d{3}-\d{4})", _corpus_text()))
+    assert found, "no telephone number found at all; the scan has drifted"
+    offenders = {n for n in found if not n.startswith("555-01")}
+    assert not offenders, f"telephone numbers outside the reserved range: {sorted(offenders)}"
+
+
+@requires_harness
+def test_every_zip_code_is_below_the_lowest_assigned_one() -> None:
+    """USPS's lowest assigned ZIP is 00501, so 00000 to 00499 cannot exist.
+
+    Read where ZIP codes appear -- `*_zip` context values and five-digit tokens in
+    speech -- and not across the whole file, where every account and event id's
+    digits would read as one. The lookbehind refuses a hyphen for the same reason.
+    """
+    from harness.core.events import SpeechEvent
+    from harness.corpus.text_adapter import parse_call
+
+    found: set[str] = set()
+    for transcript in _transcripts():
+        call = parse_call(transcript)
+        found.update(value.strip() for name, value in call.context if name.endswith("_zip"))
+        for event in call.events:
+            if isinstance(event, SpeechEvent):
+                found.update(re.findall(r"(?<![-\d])(\d{5})(?![-\d])", event.body))
+    assert found, "no ZIP codes found at all; the scan has drifted"
+    offenders = {z for z in found if not (z.isdigit() and int(z) <= 499)}
+    assert not offenders, f"ZIP codes at or above 00501: {sorted(offenders)}"
+
+
+def test_no_street_address_appears() -> None:
+    """A name with a street address is personal data where neither alone is."""
+    pattern = re.compile(r"\b\d{1,5}\s+[A-Z][a-z]+\s+(Street|St|Avenue|Ave|Road|Rd|Drive|Dr)\b")
+    match = pattern.search(_corpus_text())
+    assert match is None, f"a street address appears: {match.group(0) if match else ''!r}"
+
+
+def test_no_payment_card_number_appears() -> None:
+    """An instrument is referred to by its last four digits, never in full."""
+    match = re.search(r"\b(?:\d[ -]?){13,19}\b", _corpus_text())
+    assert match is None, "a digit run the length of a payment card number appears"
+
+
+@requires_harness
+@pytest.mark.parametrize("transcript", _transcripts(), ids=lambda path: path.stem)
+def test_header_duration_reconciles_with_the_event_log(transcript: Path) -> None:
+    """The header's duration, its own span and the last event's end are one number.
+
+    Integer arithmetic on the span, as the harness learned to do: 128.159 seconds
+    is 128158.99999999999 milliseconds in binary float, and truncating it reported a
+    header that reconciled as one millisecond short.
+    """
+    from harness.corpus.text_adapter import parse_call
+
+    call = parse_call(transcript)
+    record = call.record
+    last = call.events[-1].ended_at_ms
+    started = datetime.fromisoformat(record.started_at.replace("Z", "+00:00"))
+    ended = datetime.fromisoformat(record.ended_at.replace("Z", "+00:00"))
+    span = (ended - started) // timedelta(milliseconds=1)
+    assert record.duration_ms == last == span, (
+        f"{record.call_id}: duration {record.duration_ms}ms, last event {last}ms, "
+        f"header span {span}ms"
+    )
+
+
+@requires_harness
+@pytest.mark.parametrize("transcript", _transcripts(), ids=lambda path: path.stem)
+def test_timestamps_never_run_backwards(transcript: Path) -> None:
+    from harness.corpus.text_adapter import parse_call
+
+    call = parse_call(transcript)
+    starts = [event.started_at_ms for event in call.events]
+    for index, (earlier, later) in enumerate(itertools.pairwise(starts), start=1):
+        assert earlier <= later, (
+            f"{call.record.call_id}: event {index + 1} starts before event {index}"
+        )
+
+
+@requires_harness
+@pytest.mark.parametrize("transcript", _transcripts(), ids=lambda path: path.stem)
+def test_every_call_opens_and_closes_its_lifecycle(transcript: Path) -> None:
+    from harness.core.events import SystemEvent
+    from harness.corpus.text_adapter import parse_call
+
+    call = parse_call(transcript)
+    names = [event.name for event in call.events if isinstance(event, SystemEvent)]
+    assert "call.answered" in names, f"{call.record.call_id} never logs call.answered"
+    assert "call.ended" in names, f"{call.record.call_id} never logs call.ended"
+
+
+@requires_harness
+@pytest.mark.parametrize("transcript", _transcripts(), ids=lambda path: path.stem)
+def test_every_call_opens_with_a_recording_disclosure(transcript: Path) -> None:
+    """A California business recording calls needs two-party consent, so the notice is required."""
+    from harness.core.events import EventKind
+    from harness.corpus.text_adapter import parse_call
+
+    call = parse_call(transcript)
+    names = [e.body.split(" ")[0] for e in call.events if e.kind is EventKind.DISCLOSURE]
+    assert "recording_notice" in names, f"{call.record.call_id} delivers no recording notice"
