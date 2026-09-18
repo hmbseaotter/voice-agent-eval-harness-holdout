@@ -125,23 +125,18 @@ into the `harness` package so both repositories import one implementation.
 
 ## Replacing the token
 
-`HARNESS_READ_TOKEN` is the only secret this repository holds. The paragraph above says what it is
-for; this says how to make another, because it will need one.
+`HARNESS_READ_TOKEN` is the only secret this repository holds: `Contents: Read-only` on
+`voice-agent-eval-harness`, and nothing else. The paragraph above says what it is for.
 
-GitHub → your avatar → **Settings** → **Developer settings** → **Personal access tokens** →
-**Fine-grained tokens** → **Generate new token**, or go straight to
-<https://github.com/settings/personal-access-tokens/new>.
+**Making or replacing it** follows the harness's README, under *Access: three fine-grained tokens*,
+which walks through all three tokens these repositories use: creating one at
+<https://github.com/settings/personal-access-tokens/new>, installing it here as a repository secret
+named exactly `HARNESS_READ_TOKEN`, and running this repository's workflow by hand to see the harness
+checkout succeed. The steps are written there once rather than in each repository, so they cannot
+drift apart.
 
-| field | value |
-|---|---|
-| Resource owner | `hmbseaotter` |
-| Repository access | **Only select repositories** → `voice-agent-eval-harness` |
-| Permissions | **Repository permissions** → `Contents: Read-only`, and nothing else |
-| Expiration | your choice — **write the date down** |
-
-Copy it on the page that follows; GitHub will not show it again. Then install it here: this
-repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**,
-named exactly `HARNESS_READ_TOKEN`.
+**The token installed now expires on 2026-11-05.** It was installed on 2026-09-06 with a 60-day
+lifetime. Whoever replaces it updates this date.
 
 **On the day it expires** the harness checkout fails, every step that reads a transcript fails with
 it, and the build goes red naming what is missing. That is the intended behavior rather than a
