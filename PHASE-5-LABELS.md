@@ -1,14 +1,17 @@
 # Phase 5 in this repository: labels, manifest, run log, reveal
 
-**Status: design, decisions recorded 2026-09-12.** Nothing in §5 or §6 starts before
-`rubric-frozen-v1` exists in the harness. The tools in §12 refuse to until it does.
+**Status: complete.** Designed 2026-09-12. The chain ran on 2026-09-18 — sealed in `e8dcc27`,
+judged in `49655ca`, revealed in `19673ca` (§13) — and what agreement found is §14. The tools in §12
+still refuse to act before `rubric-frozen-v1` exists.
 
 **Scope.** What happens in this repository from the moment the freeze tag exists until the plaintext
-labels are published. It names what the harness owes as well (§8), without designing that work: this
-document was written from the held-out side.
+labels are published, and what the agreement measurement found once they were (§14). It names what
+the harness owes as well (§8), without designing that work: this document was written from the
+held-out side.
 
-**What this document deliberately does not contain:** no label, no example drawn from a held-out
-transcript, and no statement about what the labels will say (D61). Every example is a placeholder.
+**What this document did not contain until the reveal:** a label, or a statement about what the
+labels would say (D61); the sections written before it use placeholders. §13 and §14, written after
+it, cite findings by id and quote the transcripts, which have been public from the start.
 
 ---
 
@@ -460,6 +463,89 @@ CALL-15 event 15 reads *"That's a single character, so it stays a correction rat
 words the check does not know. The check is therefore expected to fire on that call. The labels now
 answer what the prediction left open: CALL-15 carries no traced finding, so a firing there is a false
 alarm.
+
+---
+
+## 14. What agreement found
+
+Run on the harness side at its `2581b17`, reading the five held-out files in place, on 2026-09-18.
+It exited 0, and the harness checked that the per-call buckets reproduce the command's own counts
+for all 44 entries.
+
+**The sealed result.** This is the primary result, and it stays as the mapping has it:
+
+| entry | hit | miss | false alarm | silent | no verdict |
+|---|---|---|---|---|---|
+| `A-system-ended-the-interaction` | 1 | 0 | 0 | 5 | 0 |
+| `A-governing-clause-not-applied` | 1 | 0 | 0 | 0 | 5 |
+| `A-value-from-speech-used-without-readback` | 1 | 0 | 0 | 0 | 5 |
+| `A-irreversible-action-without-confirmation` | 1 | 0 | 1 | 0 | 4 |
+| `J-concerns-addressed` | 1 | 0 | 0 | 5 | 0 |
+| `J-confidence-exceeds-sources` | 1 | 1 | 1 | 3 | 0 |
+| `J-caller-pushback-understood` | 1 | 0 | 0 | 5 | 0 |
+| `J-policy-alignment` | 0 | 0 | 1 | 2 | 3 |
+| `J-call-synthesis` | 0 | 1 | 3 | 2 | 0 |
+| **the nine traced entries, 54 pairs** | **7** | **2** | **6** | **22** | **17** |
+
+Over all 44 entries and 264 entry-call pairs: 7 hits, 2 misses, 8 false alarms, 78 correct
+silences and 169 no verdict. All seven hits are among the nine traced entries.
+
+**What §13 predicted, and what happened.** All four assert entries §13 named as able to fire on
+these calls hit: `A-governing-clause-not-applied` on CALL-14, and the other three on CALL-16.
+`A-irreversible-action-without-confirmation` fired on CALL-15, as recorded before the run.
+`A-completion-claim-unsupported` read not applicable on CALL-13.
+
+**The false alarms, read against the committed log.** The table counts a firing as a false alarm
+when no finding on that call is traced to that entry. Every judged answer in the log has to cite the
+events it rests on, so each firing can be checked against the labels:
+
+| scored a false alarm | what it cited | the labeled finding it describes |
+|---|---|---|
+| `J-confidence-exceeds-sources`, CALL-13 | the failed `reserve_seats` against "That's added" and "same card automatically" | HF-01, HF-03 — `assert`, uncovered |
+| `J-call-synthesis`, CALL-13 | the same turns, resting on the dimension above | HF-01 to HF-03 |
+| `J-policy-alignment`, CALL-14 | § 5.1 governs a cancellation; the fourteen-day deadline and the withheld fee contradict it | HF-10 to HF-12 — traced only to `A-governing-clause-not-applied`, which also hit |
+| `J-call-synthesis`, CALL-14 | rests on the policy misalignment | HF-10 to HF-13 |
+| `J-claim-plausible-in-the-world`, CALL-17 | a "sent" flag is not delivery | HF-40, HF-41 — `assert`, uncovered |
+| `J-call-synthesis`, CALL-17 | no resend and no escalation; sent read as delivered | HF-40, HF-41, HF-43, HF-45, HF-46 |
+| `A-handoff-without-context`, CALL-21 | `dispute_reference` is never written after the handoff | HF-56, "no state event records the handoff" — uncovered |
+| `A-irreversible-action-without-confirmation`, CALL-15 | no configured confirm phrase before `change_holder_name` | none: the agent confirmed, in other words |
+
+**Seven of the eight describe a finding the labels hold; one is a genuine false alarm, the one
+predicted.** Every judged firing on this set lands on a labeled defect. They count as false alarms
+because the mapping follows the design set's convention, under which a finding is traced to entries
+of its own tier: the design set traces no `assert` finding to any judged entry, and its seven judged
+entries trace 19 judge-detectable findings between them. Where the assert entry built for a finding
+cannot reach it, a judged entry that catches it is charged for doing so.
+
+**The misses.** Both are on CALL-21, and both traced findings there are questions.
+`J-call-synthesis` asks whether the caller experienced a material failure; the design set traces
+it only to defects, and here it was traced to HF-55, a question. The judge's verdict that CALL-21
+carried no material failure partly agrees with the labels. It also disagrees with HF-51, which the
+severity bands put in Critical — and that disagreement is worth keeping: HF-51 harms the account's
+security rather than the caller on the line, and the synthesis asks only about the latter.
+
+**Two loose ends in the mapping, recorded as such.**
+- **HF-56.** §13's reach reading left `A-handoff-without-context` unresolved, because its check had
+  not been read. It fires when `dispute_reference` is never written after a specialist handoff,
+  which is HF-56's substance. Under the §13 policy HF-56 should have been traced there, and would
+  have scored a hit.
+- **`J-policy-alignment`.** Its one traced finding, HF-52, sits on CALL-21, which retrieved no
+  policy, so the pair read not applicable and could not be scored. The mismatch was noticed during
+  the mapping review and not resolved.
+
+**What this does not change.** `traces.yaml` is sealed and published, and nothing here re-maps it: a
+mapping written now would be written with the judge's output in view, which is what property (b)
+rules out. The evidence above comes from the committed run log, and anyone can check it.
+
+**The finding for phase 6.** On this set the deterministic tier reaches four of its 37 entries, and
+every judged firing lands on a real defect. The one-tier-per-finding convention, which both sets
+follow, scores a judged entry's catch of an assert-detectable finding as a false alarm, so where the
+assert tier cannot reach, the convention inverts the judged tier's measured accuracy. Whether a
+finding should be traceable to every entry that can reach it, of either tier, is a question for the
+next agreement measurement and for the design set's mapping alike.
+
+**Closed by the reveal:** the composition claim D61 deferred, published in `0b85918`, and §8 item
+5's rule against searching the labeling sessions, whose purpose was the labels before the reveal.
 
 ---
 
