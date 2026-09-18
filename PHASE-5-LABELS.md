@@ -217,7 +217,8 @@ makes its content guessable.
    says whether the file still agrees with them. This is the design set's route (D36): the ledger
    holds the rulings, and `comparative-judgment` scores severity rather than adjudicating.
 8. **Entry mapping.** The owner writes `traces.yaml` with the rubric open. An AI may explain entries
-   when asked; the mapping calls are the owner's. `tools/validate_labels.py` then checks the findings
+   when asked; the mapping calls are the owner's. What the mapping states, and the reach policy it
+   follows, are §13. `tools/validate_labels.py` then checks the findings
    and the mapping together, which is what sealing requires.
 9. **Severity.** The owner places the held-out findings in a `comparative-judgment` store of their
    own, kept outside both repositories, and exports the result to `private/labels/severity.json`. It
@@ -388,6 +389,46 @@ Built in the order the workflow needs them. Each refuses to act before the freez
    `tests/test_label_chain.py`.
 6. `tools/label_gate.py`: the CI gate, with its synthetic controls in `tests/test_label_chain.py`,
    merged before the manifest commit.
+
+---
+
+## 13. What the mapping states, and what it does not
+
+**The policy.** `traces.yaml` lists under an entry only findings that entry could catch **as it is
+configured at the freeze commit**. Everything else goes to `uncovered`.
+
+**Why, rather than tracing what the rubric arguably ought to catch.** `traces_to` is an expectation
+about behavior: an entry must fire on the calls its traced findings sit on and stay silent
+elsewhere (D105, D125). This file is sealed and published, and a later reader takes it literally. An
+entry traced to something its check cannot reach — a threshold it does not meet, a variable it does
+not watch, a phrase it does not know — records a labeling mistake rather than a coverage gap, unless
+something beside it explains the intent. Under this policy the sealed file stays literally true, and
+the gap is stated in prose, where it can be explained and argued with.
+
+**How reach was established.** By reading, at the freeze commit, each entry's `params` and the check
+implementations behind them. **Not by running anything over these transcripts.** A mapping written
+with the checks' own output in view would be tuned on it, which is what §3's property (b) exists to
+prevent; the deterministic tier costs nothing to run, which makes the temptation worth naming.
+
+**What the reading found, in general.** The deterministic tier is configured around the design set's
+own phrasing, variable names and tools: entries carry literal claim phrases, one watches a single
+named context variable, one carries a fixed silence threshold in milliseconds, one names an outside
+party by name. An entry configured that way has no subject in a corpus written independently of it,
+whatever those calls contain. The judged entries carry no such configuration and reach every call,
+which is the asymmetry this set was always going to expose.
+
+**What publishes at the reveal, and not before.** How many findings this set holds, how many the
+mapping traces and which, are facts about the labels (D61), so they publish with the plaintext at
+C3. The reach analysis they rest on is kept in `private/labels/entry-reach.md` until then, and the
+agreement measurement at §6 step 7 reports over what the mapping traces.
+
+**One expectation recorded before the run, because a prediction made afterwards is worth less.**
+`A-irreversible-action-without-confirmation` is configured for `change_holder_name` with the confirm
+phrases "can you confirm that's right" and "before i change it". The transcripts are public, and
+CALL-15 event 15 reads *"That's a single character, so it stays a correction rather than a transfer
+— no deadline attached to it. Can I read it back? K, R-A-V-E-N-S-B-O-U-R-N."* — a confirmation in
+words the check does not know. The check is therefore expected to fire on that call. Whether that
+firing is a false alarm is a question only the labels answer, at the reveal.
 
 ---
 
