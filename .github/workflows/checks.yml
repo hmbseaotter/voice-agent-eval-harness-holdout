@@ -123,6 +123,7 @@ jobs:
         run: |
           set -eu
           expected=$(printf '%s\n' \
+            .gitattributes \
             .github/workflows/checks.yml \
             .gitignore \
             CORPUS_VERSION \
