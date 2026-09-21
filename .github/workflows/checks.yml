@@ -62,9 +62,20 @@ jobs:
         # which is this project's own recurring shape found in the mechanism built
         # to prevent it.
         #
-        # HARNESS_READ_TOKEN is a fine-grained token with Contents: read on the
-        # harness repository and nothing else. When the repositories go public the
-        # default token suffices and this can go away.
+        # HARNESS_READ_TOKEN, a fine-grained token with Contents: read on the
+        # harness and nothing else, is what fixed that. It went away on
+        # 2026-09-21: the harness is public and the default token reads it.
+        #
+        # No `token:` is passed at all, and that is deliberate rather than
+        # tidiness. A fallback naming the secret with `|| github.token` would
+        # not fall back -- an expired secret is still a non-empty string, so it
+        # would be passed, and a checkout needing no token would fail on a dead
+        # one. Naming no token cannot fail that way.
+        #
+        # This step therefore reads no secret, which the README states in those
+        # words: test_every_secret_the_workflow_reads_is_documented checks that
+        # the absence is written down, because a `token:` line dropped by
+        # accident looks exactly like one removed on purpose.
         #
         # `continue-on-error` stays, deliberately: the guard below reports "the
         # checks did not run" in the workflow's own words, which is a clearer
@@ -74,7 +85,6 @@ jobs:
         with:
           repository: hmbseaotter/voice-agent-eval-harness
           path: .harness
-          token: ${{ secrets.HARNESS_READ_TOKEN || github.token }}
           # History and tags, because the gate resolves rubric-frozen-v1 and
           # archives the frozen commit, and a depth-1 checkout fetches neither.
           fetch-depth: 0
@@ -191,8 +201,8 @@ jobs:
           python-version: "3.12"
 
       - name: Every transcript parses under the harness's current adapter
-        # Conditional, and it says so: the harness is a separate repository and
-        # a private one, a rename or a token-scope change would stop this step
+        # Conditional, and it says so: the harness is a separate repository, and
+        # a rename, a revert to private or a network fault would stop this step
         # running. Stating the condition is the fix applied to the same shape
         # in the harness's own workflow.
         if: hashFiles('.harness/pyproject.toml') != ''
@@ -286,8 +296,8 @@ jobs:
         # named like a label set, and nothing whatever about their contents. That
         # is not what a green tick claims.
         #
-        # It is also the failure mode that returns. HARNESS_READ_TOKEN expires,
-        # and on the day it does the conditional steps go quiet again. This step
+        # It is also the failure mode that returns. A rename, a revert to private
+        # or a network fault sends the conditional steps quiet again. This step
         # is what turns that silent reversion into a red build, which is the whole
         # difference between a promise and a check.
         if: hashFiles('.harness/pyproject.toml') == ''
@@ -296,6 +306,7 @@ jobs:
           echo "::error::on .harness/pyproject.toml was skipped: the parse check, the ported"
           echo "::error::conventions, the persona and name declarations, the phase-5 label gate,"
           echo "::error::and the lint, format and type checks. This job has verified nothing"
-          echo "::error::about transcript contents. Most likely HARNESS_READ_TOKEN is missing or"
-          echo "::error::expired -- it needs Contents: read on hmbseaotter/voice-agent-eval-harness."
+          echo "::error::about transcript contents. Check that hmbseaotter/voice-agent-eval-harness"
+          echo "::error::is still public and still named that. If it is private again, the checkout"
+          echo "::error::step needs a token with Contents: read on it."
           exit 1

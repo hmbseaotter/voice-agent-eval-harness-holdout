@@ -99,16 +99,21 @@ caveat saying its contents were *"asserted there"*.
 
 Every step that reads a transcript is conditional on the harness repository being checked out
 alongside, and **the build fails when it is not.** That was a warning until 2026-09-06, and the
-warning is why this section was describing checks that had never run. The harness is private, the
-default `GITHUB_TOKEN` is scoped to this repository alone, and so the checkout failed on every run
-from the day the workflow was added — silently, because `continue-on-error` swallowed it. The build
-stayed green while asserting that five files existed and nothing at all about what was in them. The
-workflow said so every time, in a warning nobody read.
+warning is why this section was describing checks that had never run. The harness was private then,
+the default `GITHUB_TOKEN` is scoped to this repository alone, and so the checkout failed on every
+run from the day the workflow was added — silently, because `continue-on-error` swallowed it. The
+build stayed green while asserting that five files existed and nothing at all about what was in
+them. The workflow said so every time, in a warning nobody read.
 
-`HARNESS_READ_TOKEN` — a fine-grained token carrying `Contents: read` on the harness repository and
-nothing else — is what makes the checkout work. It also expires, and on the day it does these checks
-would go quiet again; the failing step is what turns that reversion into a red build instead of a
-green one. This is the difference the repository keeps rediscovering, between a promise and a check.
+**The harness is public as of 2026-09-21, so the checkout needs no token** and the default
+`GITHUB_TOKEN` reads it. `HARNESS_READ_TOKEN` carried `Contents: read` on the harness and is what
+made the checkout work while it was private. It is now gone from the workflow rather than left in
+place behind a fallback, for a reason worth stating: an expired secret is still a non-empty string,
+so `secrets.HARNESS_READ_TOKEN || github.token` would never have fallen back — it would have passed
+the dead token, and a checkout needing no token would fail on one. The failing step stays. Whatever
+stops the harness arriving — a rename, a revert to private, a network fault — it turns a silent
+reversion into a red build. This is the difference the repository keeps rediscovering, between a
+promise and a check.
 
 `tests/test_holdout_conventions.py` ports conventions the harness enforces over its own corpus and
 could not enforce over this one, because the harness's own suite globs `corpus/transcripts/` and so
@@ -123,23 +128,30 @@ and two copies of a rule are two things that can disagree. That weakness is stat
 docstring rather than left to be discovered, and the fix, if anyone wants it, is for the rule to move
 into the `harness` package so both repositories import one implementation.
 
-## Replacing the token
+## The token this used to need
 
-`HARNESS_READ_TOKEN` is the only secret this repository holds: `Contents: Read-only` on
-`voice-agent-eval-harness`, and nothing else. The paragraph above says what it is for.
+`HARNESS_READ_TOKEN` was the only secret this repository held: `Contents: Read-only` on
+`voice-agent-eval-harness`, and nothing else. It existed because the harness was private and the
+default `GITHUB_TOKEN` cannot read a second private repository. **The harness is public, so nothing
+uses the secret** — the workflow passes no `token:` at all, and the secret can be deleted from this
+repository's settings.
 
-**Making or replacing it** follows the harness's README, under *Access: three fine-grained tokens*,
-which walks through all three tokens these repositories use: creating one at
+**Removing it mattered more than leaving it installed would have.** An expired token is still a
+stored string, so a fallback spelled `secrets.HARNESS_READ_TOKEN || github.token` never falls back:
+it passes the dead token, and the checkout fails with a 401 that the harness being public had
+otherwise made impossible. The token installed on 2026-09-06 expires on 2026-11-05, and that date is
+now inert rather than a cliff.
+
+**If the harness ever goes private again** the checkout needs a token once more. The steps are in the
+harness's README, under *Access: three fine-grained tokens*, which walks through all three tokens
+these repositories use: creating one at
 <https://github.com/settings/personal-access-tokens/new>, installing it here as a repository secret
-named exactly `HARNESS_READ_TOKEN`, and running this repository's workflow by hand to see the harness
-checkout succeed. The steps are written there once rather than in each repository, so they cannot
-drift apart.
+named exactly `HARNESS_READ_TOKEN`, and restoring `token: ${{ secrets.HARNESS_READ_TOKEN }}` — named
+outright, with no `||` — to the harness checkout step. The steps are written there once rather than
+in each repository, so they cannot drift apart.
 
-**The token installed now expires on 2026-11-05.** It was installed on 2026-09-06 with a 60-day
-lifetime. Whoever replaces it updates this date.
-
-**On the day it expires** the harness checkout fails, every step that reads a transcript fails with
-it, and the build goes red naming what is missing. That is the intended behavior rather than a
+**When the harness does not arrive, for any reason,** every step that reads a transcript is skipped
+and the build goes red naming what is missing. That is the intended behavior rather than a
 regression — the alternative is the one this repository shipped until 2026-09-06, a green build that
 checked nothing.
 

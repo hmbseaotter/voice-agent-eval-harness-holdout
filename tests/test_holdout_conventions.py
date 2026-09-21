@@ -1575,6 +1575,16 @@ _SECRET_REFERENCE: Final[re.Pattern[str]] = re.compile(r"secrets\.([A-Z][A-Z0-9_
 _GRANT: Final[re.Pattern[str]] = re.compile(r"\b(?:Contents|Actions|Metadata|Workflows):")
 _TOKEN_CREATION_URL: Final[str] = "settings/personal-access-tokens"
 
+#: What the README must say for "this workflow reads no secret" to count as a
+#: decision rather than a deletion nobody noticed. A workflow can legitimately
+#: need no token -- this one stopped needing one when the harness went public on
+#: 2026-09-21 -- and a guard that called that a broken check would go red for a
+#: repository doing nothing wrong. But silence is the other failure, and the two
+#: are indistinguishable in YAML: a `token:` line dropped by accident and one
+#: removed on purpose leave the same absence behind. So the absence has to be
+#: stated in prose, where removing it is a visible edit to a reviewed file.
+_NO_SECRET_MARKER: Final[str] = "needs no token"
+
 
 def _undocumented_secrets(workflow: str, readme: str) -> list[str]:
     """What a workflow reads that its README does not explain.
@@ -1582,13 +1592,22 @@ def _undocumented_secrets(workflow: str, readme: str) -> list[str]:
     Takes both texts rather than reading them, so the control can run this over
     a workflow it has written. A control that restates the arithmetic proves the
     arithmetic rather than the check.
+
+    A workflow naming no secret is checked in the other direction: it has to say
+    in the README why it needs none. See `_NO_SECRET_MARKER`.
     """
     problems: list[str] = []
     names = sorted(
         name for name in set(_SECRET_REFERENCE.findall(workflow)) if name != "GITHUB_TOKEN"
     )
     if not names:
-        return ["the workflow reads no secret at all, so this check compared nothing"]
+        if _NO_SECRET_MARKER not in readme:
+            return [
+                "the workflow reads no secret, and the README does not say why none is "
+                f"needed: without the words {_NO_SECRET_MARKER!r} a dropped `token:` line "
+                "and a deliberate one read identically"
+            ]
+        return []
 
     for name in names:
         mentions = [line for line in readme.splitlines() if name in line]
@@ -1722,10 +1741,11 @@ def test_every_secret_the_workflow_reads_is_documented() -> None:
 def test_the_secret_documentation_guard_finds_an_undocumented_secret() -> None:
     """The control, because a repository already documented proves nothing.
 
-    Four plants, one per thing the guard claims to check: a secret absent from
+    Five plants, one per thing the guard claims to check: a secret absent from
     the README, one named without its grant, a README with no expiry warning,
-    and one with nowhere to make a replacement. A guard that checked only the
-    name would pass three of these.
+    one with nowhere to make a replacement, and a workflow reading no secret at
+    all without the README saying why. A guard that checked only the name would
+    pass four of these.
 
     `GITHUB_TOKEN` is planted too, in the other direction: it is provided by
     the runner rather than installed by anybody, so requiring documentation for
@@ -1756,6 +1776,16 @@ def test_the_secret_documentation_guard_finds_an_undocumented_secret() -> None:
         "${{ secrets.A_TOKEN }}", "| `A_TOKEN` | `Contents: Read-only` | It expires. |"
     )
     assert any("replacement token is created" in p for p in no_route), no_route
+
+    # The fifth plant, in the direction the guard learned on 2026-09-21, when
+    # the harness went public and this workflow stopped passing a token at all.
+    # Reading no secret is a legitimate state, so it has to pass -- but only
+    # when the README says so, because the alternative is a `token:` line
+    # deleted by accident, which leaves an identical workflow behind.
+    assert not _undocumented_secrets("uses: actions/checkout@v7", "the checkout needs no token")
+
+    silent = _undocumented_secrets("uses: actions/checkout@v7", good)
+    assert any("does not say why none is needed" in p for p in silent), silent
 
     assert not _undocumented_secrets("${{ secrets.A_TOKEN }} ${{ secrets.GITHUB_TOKEN }}", good), (
         "GITHUB_TOKEN is supplied by the runner, so demanding documentation for it would "
