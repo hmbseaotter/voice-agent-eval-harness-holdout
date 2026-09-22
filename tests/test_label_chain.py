@@ -35,6 +35,7 @@ if TYPE_CHECKING:  # pragma: no cover - types only
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
+import freeze_proof  # noqa: E402
 import label_gate as chain  # noqa: E402
 import label_manifest as manifest_tool  # noqa: E402
 import make_label_worksheet as worksheet  # noqa: E402
@@ -449,13 +450,18 @@ def test_nothing_sealed_holds_even_without_a_harness(tmp_path: Path) -> None:
     assert chain.gate(repo, None) == ("S0", [])
 
 
-def test_anything_sealed_without_the_tag_is_red(tmp_path: Path) -> None:
-    """A manifest with no resolvable freeze behind it is a label before the freeze (D21)."""
+def test_anything_sealed_without_a_nameable_freeze_is_red(tmp_path: Path) -> None:
+    """A manifest with no freeze behind it at all is a label before the freeze (D21).
+
+    Neither mechanism answers here: there is no harness to publish a proof and none to
+    resolve a tag in. The gate names both, because which one is missing is the first
+    thing a reader of a red build wants to know.
+    """
     repo = _repository(tmp_path / "repo")
     _extend(repo, _base(), _seal("e" * 40, b"findings\n", b"traces\n"))
     stage, problems = chain.gate(repo, None)
     assert stage == "S1"
-    assert any("does not resolve" in problem for problem in problems), problems
+    assert any("neither publishes a" in problem for problem in problems), problems
 
 
 # --------------------------------------------------------------------------
@@ -662,8 +668,14 @@ def test_each_step_out_of_order_at_the_reveal_turns_the_gate_red(
     assert any(phrase in problem for problem in problems), problems
 
 
-def test_a_moved_tag_turns_the_gate_red(tmp_path: Path) -> None:
-    """A tag moved after sealing breaks the trailer and the header both (§9)."""
+def test_a_moved_freeze_turns_the_gate_red(tmp_path: Path) -> None:
+    """A freeze that moves after sealing breaks the trailer and the header both (§9).
+
+    Driven here by moving a tag, because the stand-in harness names its freeze that way
+    and `freeze_commit` falls back to a tag when no proof is published. What is under test
+    is the gate comparing the manifest's cited F against the freeze the harness names,
+    which is the same check whichever mechanism named it.
+    """
     harness, freeze = _stand_in_harness(tmp_path / "harness")
     repo = _repository(tmp_path / "repo")
     _extend(repo, _base(), _seal(freeze, *_labels(freeze)))
@@ -675,7 +687,7 @@ def test_a_moved_tag_turns_the_gate_red(tmp_path: Path) -> None:
 
     stage, problems = _gate(repo, harness)
     assert stage == "S1"
-    assert any("a tag moved after sealing" in problem for problem in problems), problems
+    assert any("the freeze moved after sealing" in problem for problem in problems), problems
     assert any("without exactly the trailer" in problem for problem in problems), problems
 
 
@@ -695,7 +707,15 @@ def test_the_frozen_template_hash_is_the_one_the_harness_recorded_at_its_freeze(
     freeze = worksheet.freeze_commit(HARNESS)
     if freeze is None:
         pytest.skip(f"{worksheet.FREEZE_TAG} is not fetched into this harness checkout")
-    listed = _git(HARNESS, "ls-tree", "-r", "--name-only", freeze, "--", "runs").splitlines()
+    try:
+        listed = _git(HARNESS, "ls-tree", "-r", "--name-only", freeze, "--", "runs").splitlines()
+    except subprocess.CalledProcessError:
+        pytest.skip(
+            "this harness checkout cannot reach the freeze commit, so the reference run log "
+            "it committed there is not readable here. The freeze proof publishes the frozen "
+            "rubric, template and src, not the runs tree, and the harness's own suite holds "
+            "its reference log to the frozen template hash instead"
+        )
     references = [path for path in listed if re.fullmatch(r"runs/reference-[^/]+\.jsonl", path)]
     if not references:
         pytest.skip("the harness had committed no reference run log at its freeze")
@@ -725,7 +745,7 @@ def test_the_frozen_rubric_hash_agrees_with_the_harness_s_own_function(tmp_path:
     except ImportError:
         pytest.skip("this harness checkout is older than the rubric hash")
 
-    blob = chain.show(HARNESS, freeze, "rubric.yaml")
+    blob = freeze_proof.frozen_bytes(HARNESS, freeze, "rubric.yaml")
     written = tmp_path / "rubric.yaml"
     written.write_bytes(blob)
 

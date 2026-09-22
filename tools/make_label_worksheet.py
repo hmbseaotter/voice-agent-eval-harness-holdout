@@ -45,6 +45,8 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+import freeze_proof
+
 if TYPE_CHECKING:  # pragma: no cover - types only, and the harness may be absent
     from collections.abc import Sequence
 
@@ -118,11 +120,24 @@ def harness_root() -> Path | None:
 
 
 def freeze_commit(harness: Path) -> str | None:
-    """The commit `rubric-frozen-v1` names in `harness`, or None when it does not resolve.
+    """The freeze commit `harness` names, however that checkout is able to name it.
 
-    Read from that checkout's own refs, so a tag that exists on GitHub and was never
-    fetched reads as absent, which is the safe direction to be wrong in.
+    Two checkouts have to work, and they name it differently. A clone of the private working
+    repository still carries the annotated tag, and is asked for it by name. The published
+    harness is a snapshot (harness D208) and cannot carry a ref reaching the freeze, so it
+    publishes the commit object instead and the id is recomputed from its bytes (O-12).
+
+    The proof is preferred where both exist, because an id recomputed from bytes cannot be
+    moved and a tag can. A tag read from that checkout's own refs, never from GitHub, so one
+    that exists remotely and was never fetched reads as absent -- the safe direction to be
+    wrong in, and the reason None is still a possible answer.
     """
+    try:
+        proof = freeze_proof.load(harness)
+    except freeze_proof.ProofError:
+        return None
+    if proof is not None:
+        return proof.commit_sha
     try:
         result = subprocess.run(
             [

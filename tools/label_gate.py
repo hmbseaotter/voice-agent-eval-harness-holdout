@@ -19,8 +19,8 @@ include the ones before it.
 
 - S0: nothing under `labels/` or `runs/`, and no label file or salt in any commit.
 - S1: `labels/MANIFEST`. Every commit that touched it carries
-  `Rubric-Frozen: <F>`, where F is the commit `rubric-frozen-v1` names now, and
-  is dated after F. The manifest names F and holds one digest line per sealed file.
+  `Rubric-Frozen: <F>`, where F is the commit the published freeze proof opens,
+  and is dated after F. The manifest names F and holds one digest line per sealed file.
 - S2: `runs/heldout-*.jsonl`. Each log's header record names, as
   `labels_manifest`, the last commit to touch `labels/MANIFEST` before the log
   was committed. It states the rubric version, the prompt-template hash and the
@@ -35,17 +35,28 @@ include the ones before it.
 
 Anything else under `labels/` or `runs/` fails, whatever it is called.
 
-A MOVED TAG
------------
-F is read from the harness checkout on every run, never from this repository. A
-tag moved after sealing no longer matches the trailer and the manifest header
-recorded at sealing, so S1 fails, as §9 requires.
+WHERE F COMES FROM
+------------------
+F is read from the harness checkout on every run, never from this repository,
+and it is read from published objects rather than from a ref (O-12). The harness
+is a snapshot (harness D208), so the freeze commit is not reachable in its log
+and no tag can name it without dragging the private history behind it. Its
+`freeze-proof/` publishes that commit, its annotated tag and the trees beneath
+it, each file named by its own object id, and `tools/freeze_proof.py` recomputes
+every id it uses under git's rule `sha1("<type> <size>\0" + bytes)`.
+
+That is stronger than the tag it replaces, not a concession. A tag is a name and
+a name can be moved; an object id cannot be moved onto different bytes without a
+SHA-1 second preimage. The manifest's cited F is checked against the id the
+commit object hashes to, so a proof naming some other commit fails S1 exactly as
+a moved tag did, and §9 is kept by arithmetic rather than by a ref.
 
 THE TEMPLATE HASH AT F
 ----------------------
 `prompt_template_hash` is not a file digest: the harness hashes the two halves
 it sends, with comments stripped. So the gate does not reimplement it. It runs
-the frozen commit's own code, from an archive of that commit, in a separate
+the frozen commit's own code -- the `src` tree reconstructed from the published
+objects, not the harness's current one, which has moved since F -- in a separate
 interpreter, and a test checks that this reproduces the hash in the reference
 run log the harness had committed at F.
 
@@ -82,6 +93,8 @@ from typing import TYPE_CHECKING, Final
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from freeze_proof import PROOF_DIR, ProofError, frozen_bytes
+from freeze_proof import load as load_proof
 from make_label_worksheet import FREEZE_TAG, REPO_ROOT, freeze_commit, harness_root
 from validate_labels import SEVERITY_NAME, validate
 
@@ -316,26 +329,48 @@ def rubric_digest(blob: bytes) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def _frozen_at(harness: Path, freeze_sha: str) -> int:
+    """When the freeze commit was committed, read from whichever the harness can answer.
+
+    A clone reaching the freeze is asked directly. The published snapshot cannot be, so the
+    timestamp is read out of the freeze commit object the proof publishes -- the same bytes
+    whose id the manifest cites, so nothing new is trusted to get it.
+    """
+    proof = load_proof(harness)
+    if proof is not None and proof.commit_sha == freeze_sha:
+        return proof.committed_at
+    return committed_at(harness, freeze_sha)
+
+
 def frozen_header(harness: Path, freeze_sha: str) -> FrozenHeader:
-    """The rubric version and prompt-template hash the harness computes at `freeze_sha`."""
+    """The rubric version and prompt-template hash the harness computed at `freeze_sha`.
+
+    Every input is tied to the freeze by an object id rather than by asking git for a
+    revision, because the published harness cannot resolve one (O-12).
+    """
     import yaml
 
-    blob = show(harness, freeze_sha, "rubric.yaml")
+    proof = load_proof(harness)
+    if proof is None:
+        raise GateError(f"the harness checkout publishes no {PROOF_DIR}/")
+    if proof.commit_sha != freeze_sha:
+        raise GateError(f"the freeze proof opens {proof.commit_sha[:12]}, not {freeze_sha[:12]}")
+
+    blob = frozen_bytes(harness, freeze_sha, "rubric.yaml")
     rubric = yaml.safe_load(blob)
     version = rubric.get("version") if isinstance(rubric, dict) else None
     if not isinstance(version, str):
         raise GateError(f"rubric.yaml at {freeze_sha[:12]} declares no version")
-    cli = show(harness, freeze_sha, "src/harness/cli.py").decode("utf-8")
-    template = _assigned(cli, "_DEFAULT_TEMPLATE")
-    if not isinstance(template, str):
-        raise GateError("the frozen harness's default template is not a path")
 
     with tempfile.TemporaryDirectory() as scratch:
         root = Path(scratch)
-        archive = _git(harness, "archive", "--format=tar", freeze_sha, "src")
-        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-            tar.extractall(root, filter="data")
-        (root / "template.md").write_bytes(show(harness, freeze_sha, template))
+        _, src_tree = proof.entry(proof.root_tree, "src")
+        proof.materialize(src_tree, root / "src")
+        cli = (root / "src" / "harness" / "cli.py").read_text(encoding="utf-8")
+        template = _assigned(cli, "_DEFAULT_TEMPLATE")
+        if not isinstance(template, str):
+            raise GateError("the frozen harness's default template is not a path")
+        (root / "template.md").write_bytes(frozen_bytes(harness, freeze_sha, template))
         result = subprocess.run(
             [
                 sys.executable,
@@ -448,7 +483,7 @@ def gate(
     """The stage the chain in `repo` has reached, and every way it breaks §7."""
     try:
         return _gate(repo, harness, frozen)
-    except GateError as error:
+    except (GateError, ProofError) as error:
         return "?", [str(error)]
 
 
@@ -478,8 +513,8 @@ def _gate(
     freeze = freeze_commit(harness) if harness is not None else None
     if harness is None or freeze is None:
         problems.append(
-            f"labels/ or runs/ hold files, but {FREEZE_TAG} does not resolve in the harness "
-            "checkout; nothing is sealed before the freeze (D21)"
+            f"labels/ or runs/ hold files, but the harness checkout neither publishes a "
+            f"{PROOF_DIR}/ nor resolves {FREEZE_TAG}; nothing is sealed before the freeze (D21)"
         )
         return stage, problems
     if MANIFEST not in paths:
@@ -493,10 +528,11 @@ def _gate(
     problems += malformed
     if manifest is not None and manifest.freeze_sha != freeze:
         problems.append(
-            f"{MANIFEST}: names {manifest.freeze_sha[:12]} as the freeze commit, but {FREEZE_TAG} "
-            f"names {freeze[:12]}; a tag moved after sealing breaks every citation (§9)"
+            f"{MANIFEST}: names {manifest.freeze_sha[:12]} as the freeze commit, but the harness "
+            f"opens {freeze[:12]}; the freeze moved after sealing, which breaks every "
+            "citation (§9)"
         )
-    frozen_at = committed_at(harness, freeze)
+    frozen_at = _frozen_at(harness, freeze)
     for commit in touching(repo, MANIFEST):
         if trailer(repo, commit, RUBRIC_FROZEN) != [freeze]:
             problems.append(

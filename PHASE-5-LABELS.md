@@ -252,8 +252,12 @@ makes its content guessable.
 
 ## 7. The gate in CI
 
-**Checkouts.** Both get `fetch-depth: 0`. The freeze commit is
-`git -C .harness rev-parse -q --verify refs/tags/rubric-frozen-v1^{commit}`.
+**Checkouts.** Both get `fetch-depth: 0`. The freeze commit is whichever the harness
+checkout can name. A clone of the private working repository still carries the annotated tag
+and is asked for it by name; the published harness is a snapshot and cannot carry a ref
+reaching the freeze, so it publishes the commit object in `freeze-proof/` and the id is
+recomputed from its bytes (harness D209, O-12). `tools/freeze_proof.py` prefers the proof
+where both exist, because an id recomputed from bytes cannot be moved and a tag can.
 
 **A stage-aware allowlist.** The existing allowlist stays the rule for every other path.
 

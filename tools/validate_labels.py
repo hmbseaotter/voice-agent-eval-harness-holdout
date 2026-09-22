@@ -72,7 +72,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,6 +79,7 @@ from typing import TYPE_CHECKING, Final, TypeGuard
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import freeze_proof
 from make_label_worksheet import (
     FREEZE_TAG,
     PRIVATE,
@@ -213,20 +213,18 @@ def design_finding_ids(harness: Path) -> set[str]:
 def rubric_entry_ids(harness: Path, freeze_sha: str) -> list[str] | None:
     """The entry ids of `rubric.yaml` at the freeze commit, or None when it cannot be read there.
 
-    Read with `git show` and never from the working tree: the harness's `main` moves on
-    after the freeze, and the mapping is to the rubric the judge was frozen with (§4).
+    Never read from the working tree: the harness's `main` moves on after the freeze, and the
+    mapping is to the rubric the judge was frozen with (§4). Which mechanism proves that is the
+    checkout's to decide -- `git show` where the freeze is reachable, and the published blob id
+    where it is not (O-12) -- and `freeze_proof.frozen_bytes` picks between them.
     """
     import yaml
 
-    shown = subprocess.run(
-        ["git", "-C", str(harness), "show", f"{freeze_sha}:rubric.yaml"],
-        capture_output=True,
-        encoding="utf-8",
-        check=False,
-    )
-    if shown.returncode != 0:
+    try:
+        blob = freeze_proof.frozen_bytes(harness, freeze_sha, "rubric.yaml")
+    except freeze_proof.ProofError:
         return None
-    document = yaml.safe_load(shown.stdout)
+    document = yaml.safe_load(blob)
     entries = document.get("entries") if isinstance(document, dict) else None
     if not isinstance(entries, list):
         return None

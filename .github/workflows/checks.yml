@@ -153,6 +153,7 @@ jobs:
             tools/build_review_folder.py \
             tools/declare_names.py \
             tools/declare_personas.py \
+            tools/freeze_proof.py \
             tools/label_gate.py \
             tools/label_manifest.py \
             tools/make_label_findings.py \
