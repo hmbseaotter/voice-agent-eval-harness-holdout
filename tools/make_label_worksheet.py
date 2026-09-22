@@ -223,6 +223,11 @@ def _template(call_id: str) -> list[str]:
 
 
 def _render_call(call: Call) -> list[str]:
+    # Imported here, not narrowed here: the harness widened an event's timestamps to
+    # `int | None` after the freeze, and `timing` is the rule it states for reading them.
+    # A copy of that rule in this repository would be a second thing that can disagree.
+    from harness.core.events import timing
+
     call_id = call.record.call_id
     lines = [f"## {call_id}", "", "**Call record**", "", "| field | value |", "|---|---|"]
     for field in dataclasses.fields(call.record):
@@ -248,9 +253,9 @@ def _render_call(call: Call) -> list[str]:
         "|---|---|---|---|---|",
     ]
     lines += [
-        f"| {event.index} | {_clock(event.started_at_ms)} | {_clock(event.ended_at_ms)} "
+        f"| {event.index} | {_clock(started)} | {_clock(ended)} "
         f"| `{_cell(event.kind)}` | {_cell(event.body)} |"
-        for event in call.events
+        for event, (started, ended) in ((event, timing(event)) for event in call.events)
     ]
     if call.unparsed:
         lines += ["", "**Lines the parser could not read**", ""]

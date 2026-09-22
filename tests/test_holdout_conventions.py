@@ -1116,7 +1116,7 @@ def test_every_utterance_here_is_spoken_at_a_plausible_rate() -> None:
     against the harness's own file below rather than trusted, which is the same
     remedy the `_sourced_by` copy gets.
     """
-    from harness.core.events import SpeechEvent
+    from harness.core.events import SpeechEvent, timing
     from harness.corpus.text_adapter import parse_call
 
     rows: list[tuple[str, int, int, float]] = []
@@ -1126,7 +1126,8 @@ def test_every_utterance_here_is_spoken_at_a_plausible_rate() -> None:
             if not isinstance(event, SpeechEvent):
                 continue
             words = len(event.body.split())
-            seconds = (event.ended_at_ms - event.started_at_ms) / 1000.0
+            started, ended = timing(event)
+            seconds = (ended - started) / 1000.0
             if words < _MINIMUM_WORDS_FOR_A_RATE or seconds <= 0:
                 continue
             rows.append((call.record.call_id, event.index, words, words / seconds * 60.0))
@@ -1905,10 +1906,13 @@ def test_header_duration_reconciles_with_the_event_log(transcript: Path) -> None
 @requires_harness
 @pytest.mark.parametrize("transcript", _transcripts(), ids=lambda path: path.stem)
 def test_timestamps_never_run_backwards(transcript: Path) -> None:
+    # `timing` rather than reading the attribute: it is `int | None` in the harness now,
+    # and an event whose source records none should fail by name, not compare as None.
+    from harness.core.events import timing
     from harness.corpus.text_adapter import parse_call
 
     call = parse_call(transcript)
-    starts = [event.started_at_ms for event in call.events]
+    starts = [timing(event)[0] for event in call.events]
     for index, (earlier, later) in enumerate(itertools.pairwise(starts), start=1):
         assert earlier <= later, (
             f"{call.record.call_id}: event {index + 1} starts before event {index}"

@@ -378,7 +378,9 @@ def evidence_problems(rows: Sequence[Row], calls: Mapping[str, Call]) -> tuple[l
     reviewer as prose about an absence. A row whose own call has no transcript is skipped,
     because `identity_problems` already names it.
     """
-    from harness.core.events import EventKind
+    # `timing` rather than a local narrowing: the harness widened an event's timestamps
+    # to `int | None` after the freeze and states the reading rule itself (D186's shape).
+    from harness.core.events import EventKind, timing
 
     kinds = {member.name for member in EventKind}
     problems: list[str] = []
@@ -454,7 +456,7 @@ def evidence_problems(rows: Sequence[Row], calls: Mapping[str, Call]) -> tuple[l
                         f"{match_span.group('second')}, which {row.call_ref} does not both have"
                     )
                     continue
-                actual = (_stamp(first.ended_at_ms), _stamp(second.started_at_ms))
+                actual = (_stamp(timing(first)[1]), _stamp(timing(second)[0]))
                 if actual != (match_span.group("start"), match_span.group("end")):
                     problems.append(
                         f"{where}: the span it states between events {first.index} and "
@@ -500,7 +502,8 @@ def evidence_problems(rows: Sequence[Row], calls: Mapping[str, Call]) -> tuple[l
             match_final = _FINAL_EVENT.search(flat)
             if match_final is not None:
                 checked += 1
-                if int(match_final.group("ms")) != max(event.ended_at_ms for event in call.events):
+                ends = [timing(event)[1] for event in call.events]
+                if int(match_final.group("ms")) != max(ends):
                     problems.append(
                         f"{where}: the end it states for the final event is not the call's"
                     )
