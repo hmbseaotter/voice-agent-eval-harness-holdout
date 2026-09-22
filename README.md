@@ -133,8 +133,10 @@ into the `harness` package so both repositories import one implementation.
 `HARNESS_READ_TOKEN` was the only secret this repository held: `Contents: Read-only` on
 `voice-agent-eval-harness`, and nothing else. It existed because the harness was private and the
 default `GITHUB_TOKEN` cannot read a second private repository. **The harness is public, so nothing
-uses the secret** — the workflow passes no `token:` at all, and the secret can be deleted from this
-repository's settings.
+used the secret** — the workflow passes no `token:` at all — and it was **deleted from this
+repository's settings on 2026-09-22**, when this repository was published. It holds no secret now.
+The token itself remains revocable at <https://github.com/settings/personal-access-tokens> until it
+expires: deleting a repository secret removes the copy, not the credential.
 
 **Removing it mattered more than leaving it installed would have.** An expired token is still a
 stored string, so a fallback spelled `secrets.HARNESS_READ_TOKEN || github.token` never falls back:

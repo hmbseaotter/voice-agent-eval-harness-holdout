@@ -353,9 +353,9 @@ nothing here (§4).
 | Either list seen before the other is saved | the comparison anchors | save both first (§5 step 4) |
 | Label error found **before** any run | fixable | re-seal; S2 binds a run to the latest manifest |
 | Label error found **after** a run | the sealed labels are what agreement is measured on | publish an erratum beside them; never edit the sealed files |
-| Plaintext committed early | published before the run; CI red but cannot unpublish | `reveal` is the only sanctioned route; while private, an early push is not public |
-| Tag moved or deleted | citations stop matching | S1 fails loudly |
-| `HARNESS_READ_TOKEN` expires mid-phase | the gate cannot see the tag | the existing failure step turns it red |
+| Plaintext committed early | published before the run, and **this repository is public since 2026-09-22**, so an early push is public the moment it lands and cannot be unpublished | `reveal` is the only sanctioned route. The gate turns CI red, which records the lapse rather than undoing it; there is no longer a private window to catch it in |
+| The published freeze proof is altered or withdrawn | citations stop matching | S1 fails loudly. Every object under `freeze-proof/` is named by its own id, so an altered byte fails recomputation instead of passing quietly, and a withdrawn proof leaves the freeze unnameable |
+| The harness checkout fails, for any reason | every step that reads it is skipped, including the gate | the failing step turns the build red rather than letting the skips read as a pass. No token is involved any more: the harness is public and the workflow passes none |
 
 ## 10. Decisions recorded 2026-09-12
 
