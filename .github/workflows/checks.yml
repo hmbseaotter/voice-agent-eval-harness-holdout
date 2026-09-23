@@ -25,9 +25,10 @@ on:
   #
   # Two properties of `schedule` to know before relying on it. Failure
   # notifications go to whoever last edited the cron line, not to everyone with
-  # access. And in a public repository, which this one is meant to become, GitHub
-  # disables a scheduled workflow after 60 days without repository activity --
-  # the same silence this trigger exists to end, so a quiet stretch needs a look.
+  # access. And in a public repository, which this one has been since
+  # 2026-09-22, GitHub disables a scheduled workflow after 60 days without
+  # repository activity -- the same silence this trigger exists to end, so a
+  # quiet stretch needs a look.
   schedule:
     - cron: "17 6 * * *"
 

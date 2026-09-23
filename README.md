@@ -145,8 +145,9 @@ otherwise made impossible. The token installed on 2026-09-06 expires on 2026-11-
 now inert rather than a cliff.
 
 **If the harness ever goes private again** the checkout needs a token once more. The steps are in the
-harness's README, under *Access: three fine-grained tokens*, which walks through all three tokens
-these repositories use: creating one at
+harness's README, under *Access: the tokens CI needs, and when it needs them*, which walks through
+any token these repositories need — the dispatch token today, and the read tokens again if copies
+are run privately: creating one at
 <https://github.com/settings/personal-access-tokens/new>, installing it here as a repository secret
 named exactly `HARNESS_READ_TOKEN`, and restoring `token: ${{ secrets.HARNESS_READ_TOKEN }}` — named
 outright, with no `||` — to the harness checkout step. The steps are written there once rather than
@@ -168,9 +169,13 @@ Every one of those is a dependency **this repository's own suite cannot check**.
 `HOLDOUT-OBLIGATIONS.md` in the harness is for: a convention can change there and leave this set out
 of step, with a green build on both sides.
 
-**Three repositories share three tokens, and the map of which grants what lives in the harness's
-README**, under *Access: three fine-grained tokens*. It is there rather than here because the harness
-is the hub — the only one of the three that talks to both others.
+**One token is left in the arrangement, and the map of which grants what lives in the harness's
+README**, under *Access: the tokens CI needs, and when it needs them*. There were three while the
+repositories were private; both read tokens were retired on 2026-09-22, and what remains is
+`comparative-judgment`'s dispatch token — a write permission, which being public does not grant. The
+map is there rather than here because the harness is the hub: this repository checks out its
+published snapshot and `comparative-judgment` starts its build, so both talk to it and neither talks
+to the other.
 
 ## Committing to this repository
 

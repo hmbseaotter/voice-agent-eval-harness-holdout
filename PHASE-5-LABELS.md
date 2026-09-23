@@ -31,9 +31,10 @@ it, cite findings by id and quote the transcripts, which have been public from t
 
 ## 2. Facts that shape the design
 
-1. **The harness cannot read this repository.** None of its three tokens grants read access here, so
-   **every check that needs both sides runs here**, which is the same argument that placed O-4's
-   cross-corpus check in this repository.
+1. **The harness cannot read this repository.** No token in the arrangement grants read access here
+   — there were three while the repositories were private, and the one that remains is a write
+   permission on the harness — so **every check that needs both sides runs here**, which is the
+   same argument that placed O-4's cross-corpus check in this repository.
 2. **A held-out run log contains held-out transcript text.** The run log stores "the exact prompt
    sent" (D128), and a judged prompt embeds the transcript. That log can **never be committed to the
    harness**. It is committed here.
